@@ -65,7 +65,8 @@ try {
 
     if (-not (Test-Path "$RepoPath\.git")) {
         Write-Log "Local repository not found in staging folder. Cloning..." "INFO"
-        git clone -b $Branch $AuthUrl $RepoPath 2>&1
+        # Disable credential helper to avoid prompts
+        git -c credential.helper='' clone -b $Branch $AuthUrl $RepoPath 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to clone repository."
         }
@@ -73,15 +74,15 @@ try {
 
     Set-Location -Path $RepoPath
 
-    # Fetch to check for updates
-    Write-Log "Fetching from origin..." "INFO"
-    git fetch origin $Branch 2>&1
+    # Fetch to check for updates using the authenticated URL and disabling helper
+    Write-Log "Fetching from remote..." "INFO"
+    git -c credential.helper='' fetch $AuthUrl $Branch 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to fetch from origin."
+        throw "Failed to fetch from remote."
     }
 
     $LOCAL = (git rev-parse HEAD).Trim()
-    $REMOTE = (git rev-parse "@{u}").Trim()
+    $REMOTE = (git rev-parse FETCH_HEAD).Trim()
 
     $Updated = $false
 
@@ -89,7 +90,7 @@ try {
         Write-Log "Local files are up to date with remote. Exiting." "INFO"
     } else {
         Write-Log "Remote repo is more up to date. Performing pull..." "INFO"
-        $GitOutput = git pull origin $Branch 2>&1
+        $GitOutput = git -c credential.helper='' pull $AuthUrl $Branch 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "Git pull failed. Output: $($GitOutput -join ' ')"
         }
@@ -116,8 +117,6 @@ try {
 
         # Copy PS scripts from staging base directory to C:\Scripts (if different or newer)
         Write-Log "Copying scripts..." "INFO"
-        # /XO excludes older files. Robocopy returns non-zero codes for success (1 = files copied).
-        # We check for codes >= 8 for failures.
         $RoboScripts = robocopy $RepoPath $DestScripts *.ps1 /XO /NDL /NFL /NJH /NJS
         if ($LASTEXITCODE -ge 8) {
             Write-Log "Robocopy for scripts failed with exit code $LASTEXITCODE" "ERROR"
@@ -217,8 +216,8 @@ try {
                 $emailBody = "The following errors were detected in the $ScriptName run:`n`n" + ($errorLines -join "`n")
                 
                 Import-Module PoshMailKit -ErrorAction Stop
-                Send-MKMailMessage -To $emailTo `
-                                   -From $emailFrom `
+                Send-MKMailMessage -To $Config.EmailTo `
+                                   -From $Config.EmailFrom `
                                    -Subject "Script Alert: $ScriptName Errors Detected" `
                                    -Body $emailBody `
                                    -SmtpServer "smtp.gmail.com" `
