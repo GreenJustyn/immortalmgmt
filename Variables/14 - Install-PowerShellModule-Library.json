@@ -1,0 +1,13 @@
+﻿{
+    "ModulesToInstall": [
+        "Send-MailKitMessage",
+        "poshmailkit",
+        "PSWindowsUpdate",
+        "Pester"
+    ],
+    "Force": true,
+    "AcceptLicense": true,
+    "emailTo": "justyn.green@gmail.com",
+    "emailFrom": "justyn.green@gmail.com",
+    "appPassword": "fgkk thar zjqq nbzg"
+}

@@ -1,0 +1,9 @@
+﻿{
+    "PesterTestsPath": "C:\\Scripts\\Tests\\39 - InfraTests.ps1",
+    "OutputFile": "C:\\Scripts\\Logs\\39 - PesterResults.xml",
+    "ScriptsDirectory": "C:\\Scripts",
+    "ConfigDirectory": "C:\\Scripts\\Variables",
+    "emailTo": "justyn.green@gmail.com",
+    "emailFrom": "justyn.green@gmail.com",
+    "appPassword": "fgkk thar zjqq nbzg"
+}

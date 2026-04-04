@@ -1,0 +1,9 @@
+﻿{
+    "InterfaceAlias": "Ethernet",
+    "IPAddress": "192.168.1.182",
+    "PrefixLength": 24,
+    "DefaultGateway": "192.168.1.1",
+     "emailTo": "justyn.green@gmail.com",
+    "emailFrom": "justyn.green@gmail.com",
+    "appPassword": "fgkk thar zjqq nbzg"
+}

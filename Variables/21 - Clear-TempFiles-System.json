@@ -1,0 +1,10 @@
+﻿{
+    "DirectoriesToClean": [
+        "C:\\Windows\\Temp",
+        "C:\\Scripts\\Logs\\OldLogs"
+    ],
+    "MaxAgeDays": 14,
+    "emailTo": "justyn.green@gmail.com",
+    "emailFrom": "justyn.green@gmail.com",
+    "appPassword": "fgkk thar zjqq nbzg"
+}
