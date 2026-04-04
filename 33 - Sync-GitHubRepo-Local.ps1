@@ -76,9 +76,9 @@ try {
 
     # Fetch to check for updates using the authenticated URL and disabling helper
     Write-Log "Fetching from remote..." "INFO"
-    git -c credential.helper='' fetch $AuthUrl $Branch 2>&1
+    $FetchOutput = git -c credential.helper='' fetch $AuthUrl $Branch 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to fetch from remote."
+        throw "Failed to fetch from remote. Output: $($FetchOutput -join ' ')"
     }
 
     $LOCAL = (git rev-parse HEAD).Trim()
