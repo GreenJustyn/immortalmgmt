@@ -1,6 +1,7 @@
 ﻿{
-    "LocalRepoPath": "C:\\Scripts\\Git",
+    "RepoUrl": "https://github.com/GreenJustyn/immortalmgmt.git",
     "Branch": "main",
+    "LocalRepoPath": "C:\\Scripts\\Git\\immortalmgmt",
     "emailTo": "justyn.green@gmail.com",
     "emailFrom": "justyn.green@gmail.com",
     "appPassword": "fgkk thar zjqq nbzg"

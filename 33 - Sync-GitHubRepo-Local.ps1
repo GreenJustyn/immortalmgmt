@@ -1,7 +1,7 @@
-﻿$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
 $LogFile     = "C:\Scripts\Logs\$ScriptName.log"
 $ConfigFile  = "C:\Scripts\Variables\$ScriptName.json"
-$CredFile    = "C:\Scripts\Credentials\credential.xml"
+$CredFile    = "C:\Scripts\Credentials\git-credential.xml"
 $Environment = "#{ENVIRONMENT}#"
 
 # 1. Native Write-Log Function with Severity Levels
@@ -41,27 +41,132 @@ try {
         throw "FATAL: Git is not installed on the system."
     }
 
-    if (Test-Path "$($Config.LocalRepoPath)\.git") {
-        Write-Log "Git repository found. Pulling latest changes from branch $($Config.Branch)..." "INFO"
-        
-        Set-Location -Path $Config.LocalRepoPath
-        
-        try {
-            # 2>&1 captures std-error to the variable as well
-            $GitOutput = git pull origin $Config.Branch 2>&1
-            
-            # Native EXE check - Git returns non-zero if it fails
-            if ($LASTEXITCODE -ne 0) {
-                throw "Git pull returned exit code $LASTEXITCODE. Output: $($GitOutput -join ' ')"
-            }
-            
-            Write-Log "Git Output: $($GitOutput -join ' ')" "INFO"
-        } catch {
-            throw "Git pull failed. $($_.Exception.Message)"
+    # Load GitHub PAT
+    if (-not (Test-Path $CredFile)) {
+        throw "FATAL: GitHub credential file missing at $CredFile."
+    }
+    $SecureToken = Import-Clixml -Path $CredFile
+    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureToken)
+    $Token = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+
+    $RepoPath = $Config.LocalRepoPath
+    $Branch = $Config.Branch
+    $RepoUrl = $Config.RepoUrl
+
+    # Construct authenticated URL
+    $AuthUrl = $RepoUrl -replace "https://", "https://$Token@"
+
+    # Ensure staging parent directory exists
+    $StagingParent = Split-Path $RepoPath
+    if (-not (Test-Path $StagingParent)) {
+        New-Item -ItemType Directory -Path $StagingParent -Force | Out-Null
+    }
+
+    if (-not (Test-Path "$RepoPath\.git")) {
+        Write-Log "Local repository not found in staging folder. Cloning..." "INFO"
+        git clone -b $Branch $AuthUrl $RepoPath 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to clone repository."
         }
+    }
+
+    Set-Location -Path $RepoPath
+
+    # Fetch to check for updates
+    Write-Log "Fetching from origin..." "INFO"
+    git fetch origin $Branch 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to fetch from origin."
+    }
+
+    $LOCAL = (git rev-parse HEAD).Trim()
+    $REMOTE = (git rev-parse "@{u}").Trim()
+
+    $Updated = $false
+
+    if ($LOCAL -eq $REMOTE) {
+        Write-Log "Local files are up to date with remote. Exiting." "INFO"
     } else {
-        # Left as a warning so it doesn't trigger a failure email if the folder is just missing
-        Write-Log "Local repository not found at $($Config.LocalRepoPath). Cannot sync." "WARNING"
+        Write-Log "Remote repo is more up to date. Performing pull..." "INFO"
+        $GitOutput = git pull origin $Branch 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Git pull failed. Output: $($GitOutput -join ' ')"
+        }
+        Write-Log "Git Output: $($GitOutput -join ' ')" "INFO"
+        $Updated = $true
+    }
+
+    if ($Updated) {
+        # Validate files (check if some key files exist)
+        if (-not (Test-Path "$RepoPath\000 - Bootstrap Script.ps1")) {
+            throw "Validation failed: Critical file missing after sync."
+        }
+        Write-Log "Files validated successfully." "INFO"
+
+        # Copy files
+        $DestScripts = "C:\Scripts"
+        $DestVariables = "C:\Scripts\Variables"
+        $DestTests = "C:\Scripts\Tests"
+
+        # Ensure directories exist
+        if (-not (Test-Path $DestScripts)) { New-Item -ItemType Directory -Path $DestScripts -Force | Out-Null }
+        if (-not (Test-Path $DestVariables)) { New-Item -ItemType Directory -Path $DestVariables -Force | Out-Null }
+        if (-not (Test-Path $DestTests)) { New-Item -ItemType Directory -Path $DestTests -Force | Out-Null }
+
+        # Copy PS scripts from staging base directory to C:\Scripts (if different or newer)
+        Write-Log "Copying scripts..." "INFO"
+        # /XO excludes older files. Robocopy returns non-zero codes for success (1 = files copied).
+        # We check for codes >= 8 for failures.
+        $RoboScripts = robocopy $RepoPath $DestScripts *.ps1 /XO /NDL /NFL /NJH /NJS
+        if ($LASTEXITCODE -ge 8) {
+            Write-Log "Robocopy for scripts failed with exit code $LASTEXITCODE" "ERROR"
+        } else {
+            Write-Log "Scripts copy completed." "INFO"
+        }
+
+        # Copy variables to C:\Scripts\Variables
+        Write-Log "Copying variables..." "INFO"
+        $RoboVars = robocopy "$RepoPath\Variables" $DestVariables *.* /XO /NDL /NFL /NJH /NJS
+        if ($LASTEXITCODE -ge 8) {
+            Write-Log "Robocopy for variables failed with exit code $LASTEXITCODE" "ERROR"
+        } else {
+            Write-Log "Variables copy completed." "INFO"
+        }
+
+        # Copy contents to C:\Scripts\Tests
+        Write-Log "Copying tests..." "INFO"
+        $RoboTests = robocopy "$RepoPath\Tests" $DestTests *.* /XO /NDL /NFL /NJH /NJS
+        if ($LASTEXITCODE -ge 8) {
+            Write-Log "Robocopy for tests failed with exit code $LASTEXITCODE" "ERROR"
+        } else {
+            Write-Log "Tests copy completed." "INFO"
+        }
+
+        # Notification on success
+        if ($Config.EmailAppPassword -and $Config.EmailFrom -and $Config.EmailTo) {
+            Write-Log "Sending success notification..." "INFO"
+            
+            $secPassword = ConvertTo-SecureString $Config.EmailAppPassword -AsPlainText -Force
+            $credential = New-Object System.Management.Automation.PSCredential ($Config.EmailFrom, $secPassword)
+            
+            $emailBody = "Sync completed successfully. Repository was updated and files were deployed."
+            
+            try {
+                Import-Module PoshMailKit -ErrorAction Stop
+                Send-MKMailMessage -To $Config.EmailTo `
+                                   -From $Config.EmailFrom `
+                                   -Subject "Script Success: $ScriptName Completed" `
+                                   -Body $emailBody `
+                                   -SmtpServer "smtp.gmail.com" `
+                                   -Port 587 `
+                                   -UseSsl `
+                                   -Credential $credential
+                Write-Log "Success notification sent." "INFO"
+            } catch {
+                Write-Log "Failed to send success notification: $($_.Exception.Message)" "WARNING"
+            }
+        }
     }
 
 } catch {
