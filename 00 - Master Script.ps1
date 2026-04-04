@@ -87,8 +87,9 @@ if (-not (Test-Path $winCredFilePath)) {
 
 # 1. Decrypt XML and extract plain password into memory
 try {
-    $credential = Import-Clixml -Path $winCredFilePath
-    $plainPassword = $credential.GetNetworkCredential().Password
+    $secureString = Import-Clixml -Path $winCredFilePath
+    # Safely convert the standalone SecureString back to plain text
+    $plainPassword = [System.Net.NetworkCredential]::new("", $secureString).Password
 } catch {
     Write-Log "Failed to decrypt XML credential file. Ensure script is run by the user who created it." "CRITICAL"
     exit
