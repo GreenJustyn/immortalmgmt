@@ -41,7 +41,7 @@ try {
         throw "FATAL: Git is not installed on the system."
     }
 
-    # Load GitHub PAT
+    # Load GitHub PAT (Uses the single-value SecureString method)
     if (-not (Test-Path $CredFile)) {
         throw "FATAL: GitHub credential file missing at $CredFile."
     }
@@ -74,7 +74,7 @@ try {
 
     Set-Location -Path $RepoPath
 
-    # Fetch to check for updates using the authenticated URL and disabling helper
+    # Fetch to check for updates using the authenticated URL
     Write-Log "Fetching from remote..." "INFO"
     $FetchOutput = git -c credential.helper='' fetch $AuthUrl $Branch 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -87,69 +87,74 @@ try {
     $Updated = $false
 
     if ($LOCAL -eq $REMOTE) {
-        Write-Log "Local files are up to date with remote. Exiting." "INFO"
+        Write-Log "Local files are up to date with remote. No copy required." "INFO"
     } else {
-        Write-Log "Remote repo is more up to date. Performing pull..." "INFO"
-        $GitOutput = git -c credential.helper='' pull $AuthUrl $Branch 2>&1
+        # Using reset --hard instead of pull to guarantee the staging folder forces a match with remote, avoiding merge conflict hangs
+        Write-Log "Remote repo is more up to date. Syncing staging folder..." "INFO"
+        $GitOutput = git -c credential.helper='' reset --hard FETCH_HEAD 2>&1
         if ($LASTEXITCODE -ne 0) {
-            throw "Git pull failed. Output: $($GitOutput -join ' ')"
+            throw "Git reset failed. Output: $($GitOutput -join ' ')"
         }
         Write-Log "Git Output: $($GitOutput -join ' ')" "INFO"
         $Updated = $true
     }
 
     if ($Updated) {
-        # Validate files (check if some key files exist)
+        # Validate files (Ensures the sync didn't pull an empty repo before copying)
         if (-not (Test-Path "$RepoPath\000 - Bootstrap Script.ps1")) {
-            throw "Validation failed: Critical file missing after sync."
+            throw "Validation failed: Critical bootstrap script missing after sync."
         }
-        Write-Log "Files validated successfully." "INFO"
+        Write-Log "Staged files validated successfully." "INFO"
 
-        # Copy files
-        $DestScripts = "C:\Scripts"
-        $DestVariables = "C:\Scripts\Variables"
-        $DestTests = "C:\Scripts\Tests"
+        # Define Destinations
+        $DestScripts     = "C:\Scripts"
+        $DestVariables   = "C:\Scripts\Variables"
+        $DestTests       = "C:\Scripts\Tests"
+        $DestCredentials = "C:\Scripts\Credentials"
 
-        # Ensure directories exist
+        # Ensure destination directories exist
         if (-not (Test-Path $DestScripts)) { New-Item -ItemType Directory -Path $DestScripts -Force | Out-Null }
         if (-not (Test-Path $DestVariables)) { New-Item -ItemType Directory -Path $DestVariables -Force | Out-Null }
         if (-not (Test-Path $DestTests)) { New-Item -ItemType Directory -Path $DestTests -Force | Out-Null }
+        if (-not (Test-Path $DestCredentials)) { New-Item -ItemType Directory -Path $DestCredentials -Force | Out-Null }
 
-        # Copy PS scripts from staging base directory to C:\Scripts (if different or newer)
-        Write-Log "Copying scripts..." "INFO"
+        # =====================================================================
+        # File Replication (Robocopy)
+        # /XO skips copying older files (replaces only newer/updated).
+        # /E copies subdirectories (needed for tests/variables).
+        # Target files NOT in the source are left completely intact.
+        # =====================================================================
+
+        # 1. Copy PS scripts from root staging directory to C:\Scripts
+        Write-Log "Deploying updated Root Scripts..." "INFO"
         $RoboScripts = robocopy $RepoPath $DestScripts *.ps1 /XO /NDL /NFL /NJH /NJS
-        if ($LASTEXITCODE -ge 8) {
-            Write-Log "Robocopy for scripts failed with exit code $LASTEXITCODE" "ERROR"
-        } else {
-            Write-Log "Scripts copy completed." "INFO"
-        }
+        if ($LASTEXITCODE -ge 8) { Write-Log "Robocopy for scripts failed (Code: $LASTEXITCODE)" "ERROR" } 
 
-        # Copy variables to C:\Scripts\Variables
-        Write-Log "Copying variables..." "INFO"
-        $RoboVars = robocopy "$RepoPath\Variables" $DestVariables *.* /XO /NDL /NFL /NJH /NJS
-        if ($LASTEXITCODE -ge 8) {
-            Write-Log "Robocopy for variables failed with exit code $LASTEXITCODE" "ERROR"
-        } else {
-            Write-Log "Variables copy completed." "INFO"
-        }
+        # 2. Copy variables
+        Write-Log "Deploying updated Variables..." "INFO"
+        $RoboVars = robocopy "$RepoPath\Variables" $DestVariables *.* /E /XO /NDL /NFL /NJH /NJS
+        if ($LASTEXITCODE -ge 8) { Write-Log "Robocopy for variables failed (Code: $LASTEXITCODE)" "ERROR" } 
 
-        # Copy contents to C:\Scripts\Tests
-        Write-Log "Copying tests..." "INFO"
-        $RoboTests = robocopy "$RepoPath\Tests" $DestTests *.* /XO /NDL /NFL /NJH /NJS
-        if ($LASTEXITCODE -ge 8) {
-            Write-Log "Robocopy for tests failed with exit code $LASTEXITCODE" "ERROR"
-        } else {
-            Write-Log "Tests copy completed." "INFO"
-        }
+        # 3. Copy tests
+        Write-Log "Deploying updated Tests..." "INFO"
+        $RoboTests = robocopy "$RepoPath\Tests" $DestTests *.* /E /XO /NDL /NFL /NJH /NJS
+        if ($LASTEXITCODE -ge 8) { Write-Log "Robocopy for tests failed (Code: $LASTEXITCODE)" "ERROR" } 
 
-        # Notification on success
+        # 4. Copy credentials
+        Write-Log "Deploying updated Credentials..." "INFO"
+        $RoboCreds = robocopy "$RepoPath\Credentials" $DestCredentials *.* /E /XO /NDL /NFL /NJH /NJS
+        if ($LASTEXITCODE -ge 8) { Write-Log "Robocopy for credentials failed (Code: $LASTEXITCODE)" "ERROR" } 
+
+        Write-Log "Deployment routines completed." "INFO"
+
+        # Success Notification
         if ($Config.EmailAppPassword -and $Config.EmailFrom -and $Config.EmailTo) {
             Write-Log "Sending success notification..." "INFO"
             
             $secPassword = ConvertTo-SecureString $Config.EmailAppPassword -AsPlainText -Force
             $credential = New-Object System.Management.Automation.PSCredential ($Config.EmailFrom, $secPassword)
             
-            $emailBody = "Sync completed successfully. Repository was updated and files were deployed."
+            $emailBody = "Sync completed successfully. The Git repository was updated and newer files were deployed."
             
             try {
                 Import-Module PoshMailKit -ErrorAction Stop
@@ -235,6 +240,9 @@ try {
     } else {
         Write-Log "Log file not found at $LogFile. Cannot scan for errors." "WARNING"
     }
+
+    # Ensure we return to the starting directory so we don't lock the Git folder
+    Set-Location -Path "C:\"
 
     Write-Log "Script execution completed." -End
 }
