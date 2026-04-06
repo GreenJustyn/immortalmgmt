@@ -63,6 +63,14 @@ BeforeAll {
     foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
     foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
     $Script:Config = [PSCustomObject]$ConfigHash
+    Write-Log "Loaded Configuration Variables:" "INFO"
+    foreach ($prop in $Script:Config.psobject.Properties) {
+        if ($prop.Name -match "Password|Token") {
+            Write-Log "  $($prop.Name) = ********" "INFO"
+        } else {
+            Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
+        }
+    }
 }
 
 Describe "Infrastructure Automation Codebase Integrity" {

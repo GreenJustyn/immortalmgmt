@@ -44,6 +44,14 @@ try {
     foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
     foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
     $Config = [PSCustomObject]$ConfigHash
+    Write-Log "Loaded Configuration Variables:" "INFO"
+    foreach ($prop in $Config.psobject.Properties) {
+        if ($prop.Name -match "Password|Token") {
+            Write-Log "  $($prop.Name) = ********" "INFO"
+        } else {
+            Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
+        }
+    }
 
     Write-Log "Triggering local PowerShell help update..." "INFO"
     

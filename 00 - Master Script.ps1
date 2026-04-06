@@ -15,6 +15,14 @@ $CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
     foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
     foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
     $config = [PSCustomObject]$ConfigHash
+    Write-Log "Loaded Configuration Variables:" "INFO"
+    foreach ($prop in $config.psobject.Properties) {
+        if ($prop.Name -match "Password|Token") {
+            Write-Log "  $($prop.Name) = ********" "INFO"
+        } else {
+            Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
+        }
+    }
 
 # --- Local Windows Paths ---
 $winSourcePath       = $config.winSourcePath 
