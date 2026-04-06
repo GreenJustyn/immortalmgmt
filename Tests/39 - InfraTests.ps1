@@ -5,9 +5,13 @@
 #>
 
 $ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$',''
-$LogFile     = "C:\Scripts\Logs\$ScriptName.log"
-$ConfigFile  = "C:\Scripts\Variables\$ScriptName.json"
-$CredFile    = "C:\Scripts\Credentials\credential.xml"
+$ScriptDir   = $PSScriptRoot
+$BaseDir     = if ((Split-Path $ScriptDir -Leaf) -eq "Tests") { Split-Path $ScriptDir -Parent } else { $ScriptDir }
+
+$LogFile     = Join-Path $BaseDir "Logs" "$ScriptName.log"
+$ConfigFile  = Join-Path $BaseDir "Variables" "$ScriptName.json"
+$GlobalFile  = Join-Path $BaseDir "Variables" "_Global.json"
+$CredFile    = Join-Path $BaseDir "Credentials" "credential.xml"
 $Environment = "#{ENVIRONMENT}#"
 
 # 1. Native Write-Log Function with Severity Levels
@@ -53,7 +57,6 @@ BeforeAll {
         throw "FATAL: Config missing at $ConfigFile." 
     }
     # Scoped to script so AfterAll can read the email settings later
-    $GlobalFile = "C:\Scripts\Variables\_Global.json"
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
     $Script:Config = $GlobalConfig

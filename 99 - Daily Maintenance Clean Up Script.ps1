@@ -37,7 +37,6 @@ try {
     if (-not (Test-Path $ConfigFile)) { 
         throw "Config file missing at $ConfigFile. Required for email alerting." 
     }
-    $GlobalFile = "C:\Scripts\Variables\_Global.json"
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
     $Config = $GlobalConfig

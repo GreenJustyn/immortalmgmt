@@ -42,8 +42,6 @@ try {
     if (-not (Test-Path $configFilePath)) {
         throw "Configuration file not found at $configFilePath."
     }
-
-        $GlobalFile = "C:\Scripts\Variables\_Global.json"
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $configFilePath -Raw | ConvertFrom-Json
     $config = $GlobalConfig

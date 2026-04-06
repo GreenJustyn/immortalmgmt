@@ -1,7 +1,11 @@
-$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
-$LogFile     = "C:\Scripts\Logs\$ScriptName.log"
-$ConfigFile  = "C:\Scripts\Variables\$ScriptName.json"
-$CredFile    = "C:\Scripts\Credentials\credential.xml"
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$',''
+$ScriptDir   = $PSScriptRoot
+$BaseDir     = if ((Split-Path $ScriptDir -Leaf) -eq "Tests") { Split-Path $ScriptDir -Parent } else { $ScriptDir }
+
+$LogFile     = Join-Path $BaseDir "Logs" "$ScriptName.log"
+$ConfigFile  = Join-Path $BaseDir "Variables" "$ScriptName.json"
+$GlobalFile  = Join-Path $BaseDir "Variables" "_Global.json"
+$CredFile    = Join-Path $BaseDir "Credentials" "credential.xml"
 $Environment = "#{ENVIRONMENT}#" # GitOps Placeholder
 
 # Unified and updated logging function
@@ -31,7 +35,6 @@ Write-Log "Initializing script execution." -Start
 
 # Load Config
 if (-not (Test-Path $ConfigFile)) { Write-Log "FATAL: Config file missing." "CRITICAL" -End; exit }
-    $GlobalFile = "C:\Scripts\Variables\_Global.json"
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
     $Config = $GlobalConfig

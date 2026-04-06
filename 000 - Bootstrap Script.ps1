@@ -3,9 +3,13 @@
 $ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
 if (-not $ScriptName) { $ScriptName = "000_Bootstrap" } # Fallback if run unsaved in ISE/VSCode
 
-$LogFile        = "C:\Scripts\Logs\$ScriptName.log"
-$configFilePath = "C:\Scripts\Variables\000 - Bootstrap.json"
-$credFilePath   = "C:\Scripts\Credentials\bootstrap.xml"
+$ScriptDir   = $PSScriptRoot
+$BaseDir     = if ((Split-Path $ScriptDir -Leaf) -eq "Tests") { Split-Path $ScriptDir -Parent } else { $ScriptDir }
+
+$LogFile     = Join-Path $BaseDir "Logs" "$ScriptName.log"
+$configFilePath = Join-Path $BaseDir "Variables" "000 - Bootstrap.json"
+$GlobalFile  = Join-Path $BaseDir "Variables" "_Global.json"
+$credFilePath   = Join-Path $BaseDir "Credentials" "bootstrap.xml"
 $taskUser       = "Administrator" # Change to "DOMAIN\Administrator" or ".\Administrator" if needed
 $Environment    = "#{ENVIRONMENT}#" # GitOps Placeholder
 
@@ -56,7 +60,6 @@ try {
     }
 
     try {
-    $GlobalFile = "C:\Scripts\Variables\_Global.json"
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $configFilePath -Raw | ConvertFrom-Json
     $config = $GlobalConfig

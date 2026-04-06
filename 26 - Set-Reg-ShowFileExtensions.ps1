@@ -1,7 +1,11 @@
-$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
-$LogFile     = "C:\Scripts\Logs\$ScriptName.log"
-$ConfigFile  = "C:\Scripts\Config\$ScriptName.json"
-$CredFile    = "C:\Scripts\Credentials\credential.xml"
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$',''
+$ScriptDir   = $PSScriptRoot
+$BaseDir     = if ((Split-Path $ScriptDir -Leaf) -eq "Tests") { Split-Path $ScriptDir -Parent } else { $ScriptDir }
+
+$LogFile     = Join-Path $BaseDir "Logs" "$ScriptName.log"
+$ConfigFile  = Join-Path $BaseDir "Variables" "$ScriptName.json"
+$GlobalFile  = Join-Path $BaseDir "Variables" "_Global.json"
+$CredFile    = Join-Path $BaseDir "Credentials" "credential.xml"
 $Environment = "#{ENVIRONMENT}#"
 
 # 1. Native Write-Log Function with Severity Levels
@@ -34,7 +38,6 @@ try {
     if (-not (Test-Path $ConfigFile)) { 
         throw "FATAL: Config missing at $ConfigFile." 
     }
-    $GlobalFile = "C:\Scripts\Variables\_Global.json"
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
     $Config = $GlobalConfig
