@@ -39,8 +39,12 @@ try {
     }
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $Config = $GlobalConfig
-    foreach ($prop in $LocalConfig.psobject.Properties) { $Config.$($prop.Name) = $prop.Value }
+    $Config = [PSCustomObject]@{}
+    foreach ($prop in $GlobalConfig.psobject.Properties) { $Config | Add-Member -MemberType NoteProperty -Name $prop.Name -Value $prop.Value }
+    foreach ($prop in $LocalConfig.psobject.Properties) {
+        if ($Config.psobject.Properties.Name -contains $prop.Name) { $Config.$($prop.Name) = $prop.Value }
+        else { $Config | Add-Member -MemberType NoteProperty -Name $prop.Name -Value $prop.Value }
+    }
 
     $taskName = "WSL Daily Shutdown"
     $taskDescription = "Shuts down all WSL instances every day at 11:59 PM."
