@@ -40,12 +40,10 @@ try {
     }
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $Config = [PSCustomObject]@{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $Config | Add-Member -MemberType NoteProperty -Name $prop.Name -Value $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) {
-        if ($Config.psobject.Properties.Name -contains $prop.Name) { $Config.$($prop.Name) = $prop.Value }
-        else { $Config | Add-Member -MemberType NoteProperty -Name $prop.Name -Value $prop.Value }
-    }
+    $ConfigHash = @{}
+    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
+    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
+    $Config = [PSCustomObject]$ConfigHash
 
     Write-Log "Triggering local PowerShell help update..." "INFO"
     

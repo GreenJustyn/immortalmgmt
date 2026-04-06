@@ -11,12 +11,10 @@ $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
 $CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $configFilePath -Raw | ConvertFrom-Json
-    $config = [PSCustomObject]@{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $config | Add-Member -MemberType NoteProperty -Name $prop.Name -Value $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) {
-        if ($config.psobject.Properties.Name -contains $prop.Name) { $config.$($prop.Name) = $prop.Value }
-        else { $config | Add-Member -MemberType NoteProperty -Name $prop.Name -Value $prop.Value }
-    }
+    $ConfigHash = @{}
+    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
+    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
+    $config = [PSCustomObject]$ConfigHash
 
 # --- Local Windows Paths ---
 $winSourcePath       = $config.winSourcePath 

@@ -59,12 +59,10 @@ BeforeAll {
     # Scoped to script so AfterAll can read the email settings later
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $Script:Config = [PSCustomObject]@{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $Script:Config | Add-Member -MemberType NoteProperty -Name $prop.Name -Value $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) {
-        if ($Script:Config.psobject.Properties.Name -contains $prop.Name) { $Script:Config.$($prop.Name) = $prop.Value }
-        else { $Script:Config | Add-Member -MemberType NoteProperty -Name $prop.Name -Value $prop.Value }
-    }
+    $ConfigHash = @{}
+    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
+    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
+    $Script:Config = [PSCustomObject]$ConfigHash
 }
 
 Describe "Infrastructure Automation Codebase Integrity" {
