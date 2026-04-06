@@ -60,10 +60,17 @@ try {
     
     try { 
         $SvcCreds = Import-Clixml -Path $CredFile 
-        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SvcCreds.Password)
+        
+        if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
+            $SecurePassword = $SvcCreds.Password
+        } else {
+            $SecurePassword = $SvcCreds # Assume it is the SecureString itself
+        }
+        
+        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePassword)
         $PlainPass = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
     } catch { 
-        throw "ERROR: Credential import failed. Ensure script is run by the user who created the XML." 
+        throw "ERROR: Credential import failed. Ensure script is run by the user who created the XML. Details: $($_.Exception.Message)" 
     } finally {
         # Securely clean up the unmanaged memory used for the string conversion
         if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }

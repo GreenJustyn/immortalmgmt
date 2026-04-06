@@ -53,10 +53,14 @@ try {
         }
     }
 
-    # Operational Logic: Ensure Pester is installed
-    if (-not (Get-Module -ListAvailable -Name Pester)) {
-        throw "FATAL: Pester module not installed. Cannot run compliance checks."
+    # Operational Logic: Ensure Pester 5 is installed and loaded
+    $Pester5 = Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version.Major -ge 5 }
+    if (-not $Pester5) {
+        throw "FATAL: Pester version 5 or higher is not installed. Cannot run compliance checks."
     }
+    
+    # Explicitly import the version 5+ module to avoid using the built-in Pester 3.x
+    Import-Module Pester -RequiredVersion $Pester5[0].Version -ErrorAction Stop
 
     if (Test-Path $Config.PesterTestsPath) {
         Write-Log "Executing Pester infrastructure tests against $($Config.ScriptsDirectory)..." "INFO"
