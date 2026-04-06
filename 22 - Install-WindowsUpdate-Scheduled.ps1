@@ -64,7 +64,13 @@ try {
     }
 
     if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
-        throw "FATAL: PSWindowsUpdate module is not installed."
+        Write-Log "PSWindowsUpdate module not found. Attempting to install from PSGallery..." "INFO"
+        try {
+            Install-Module -Name PSWindowsUpdate -Force -Scope AllUsers -ErrorAction Stop
+            Write-Log "PSWindowsUpdate installed successfully." "INFO"
+        } catch {
+            throw "FATAL: Failed to install PSWindowsUpdate. Please run script 14 or install it manually. Error: $($_.Exception.Message)"
+        }
     }
 
     Import-Module PSWindowsUpdate -ErrorAction Stop

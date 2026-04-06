@@ -65,7 +65,15 @@ try {
 
     # Idempotent Logic
     if (-not (Get-Command Get-FsrmQuota -ErrorAction SilentlyContinue)) {
-        throw "FATAL: FSRM module not found. Directory quotas cannot be enforced. Please install FS-Resource-Manager."
+        Write-Log "FSRM module not found. Attempting to install File Server Resource Manager feature..." "INFO"
+        try {
+            Install-WindowsFeature -Name FS-Resource-Manager -IncludeManagementTools -ErrorAction Stop | Out-Null
+            Write-Log "FS-Resource-Manager installed successfully." "INFO"
+            # Force reload of the module
+            Import-Module FSRM -ErrorAction SilentlyContinue
+        } catch {
+            throw "FATAL: Failed to install FS-Resource-Manager. Please install it manually. Error: $($_.Exception.Message)"
+        }
     }
 
     if (-not (Test-Path $Config.QuotaPath)) {

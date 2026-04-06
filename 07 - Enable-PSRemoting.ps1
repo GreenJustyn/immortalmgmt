@@ -65,7 +65,7 @@ try {
 
     # Idempotent Logic
     $WinRMService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
-    $Listener = Get-WSManInstance -ResourceURI cmd_config_listener -Enumerate -ErrorAction SilentlyContinue
+    $Listener = Get-WSManInstance -ResourceURI 'winrm/config/listener' -Enumerate -ErrorAction SilentlyContinue
 
     if (($WinRMService.Status -ne 'Running') -or (-not $Listener)) {
         Write-Log "PSRemoting is not fully configured. Enabling now." "INFO"

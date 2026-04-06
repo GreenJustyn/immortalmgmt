@@ -60,7 +60,11 @@ try {
     try { 
         $SvcCreds = Import-Clixml -Path $CredFile 
         # Extract SecureString password (New-LocalUser natively accepts this)
-        $SecurePassword = $SvcCreds.Password
+        if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
+            $SecurePassword = $SvcCreds.Password
+        } else {
+            $SecurePassword = $SvcCreds # Assume it is the SecureString itself
+        }
     } catch { 
         throw "ERROR: Credential import failed. Ensure the script is run by the user who created the XML." 
     }

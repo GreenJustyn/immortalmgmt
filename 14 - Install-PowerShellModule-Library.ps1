@@ -70,7 +70,7 @@ try {
         if (-not $IsInstalled) {
             Write-Log "Module '$Module' is missing. Installing from PSGallery." "INFO"
             try {
-                Install-Module -Name $Module -Force:$Config.Force -AcceptLicense:$Config.AcceptLicense -Scope AllUsers -ErrorAction Stop
+                Install-Module -Name $Module -Force:$Config.Force -Scope AllUsers -ErrorAction Stop
                 Write-Log "Successfully installed module: $Module" "INFO"
             } catch {
                 # Logged as ERROR so the script continues to the next module, but still triggers an email alert
