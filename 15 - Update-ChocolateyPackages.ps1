@@ -90,7 +90,7 @@ try {
                 # Logged as ERROR so the script continues to the next package, but still triggers an email alert
                 Write-Log "Chocolatey output for $Pkg returned code ${LASTEXITCODE}: $($Output -join ' ')" "ERROR"
             } else {
-                Write-Log "Chocolatey output for $Pkg: $($Output -join ' ')" "INFO"
+                Write-Log "Chocolatey output for ${Pkg}: $($Output -join ' ')" "INFO"
             }
         }
     }
