@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Downloads and extracts Portable Git for Windows silently to a specific directory.
 #>
@@ -43,7 +43,11 @@ try {
         throw "Configuration file not found at $configFilePath."
     }
 
-    $config = Get-Content -Path $configFilePath -Raw | ConvertFrom-Json
+        $GlobalFile = "C:\Scripts\Variables\_Global.json"
+    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
+    $LocalConfig = Get-Content -Path $configFilePath -Raw | ConvertFrom-Json
+    $config = $GlobalConfig
+    foreach ($prop in $LocalConfig.psobject.Properties) { $config.$($prop.Name) = $prop.Value }
     $InstallDir = $config.InstallDir
     $DownloadDir = $config.DownloadDir
 

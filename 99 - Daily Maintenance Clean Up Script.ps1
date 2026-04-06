@@ -1,4 +1,4 @@
-﻿# Requires -RunAsAdministrator
+# Requires -RunAsAdministrator
 
 $ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
 if (-not $ScriptName) { $ScriptName = "WSL_Shutdown_Setup" } # Fallback if run unsaved in ISE/VSCode
@@ -37,7 +37,11 @@ try {
     if (-not (Test-Path $ConfigFile)) { 
         throw "Config file missing at $ConfigFile. Required for email alerting." 
     }
-    $Config = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $GlobalFile = "C:\Scripts\Variables\_Global.json"
+    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
+    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $Config = $GlobalConfig
+    foreach ($prop in $LocalConfig.psobject.Properties) { $Config.$($prop.Name) = $prop.Value }
 
     $taskName = "WSL Daily Shutdown"
     $taskDescription = "Shuts down all WSL instances every day at 11:59 PM."

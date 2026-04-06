@@ -1,7 +1,4 @@
-﻿{
+{
     "ProviderName": "NuGet",
-    "MinimumVersion": "2.8.5.201",
-    "emailTo": "justyn.green@gmail.com",
-    "emailFrom": "justyn.green@gmail.com",
-    "appPassword": "fgkk thar zjqq nbzg"
+    "MinimumVersion": "2.8.5.201"
 }

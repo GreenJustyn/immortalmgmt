@@ -1,8 +1,5 @@
-﻿{
+{
     "PartitionStyle": "GPT",
     "FileSystem": "NTFS",
-    "DriveLetterStart": "D",
-    "emailTo": "justyn.green@gmail.com",
-    "emailFrom": "justyn.green@gmail.com",
-    "appPassword": "fgkk thar zjqq nbzg"
+    "DriveLetterStart": "D"
 }

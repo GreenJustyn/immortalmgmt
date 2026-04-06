@@ -1,9 +1,6 @@
-﻿{
+{
     "ShareName": "LabAdmin$",
     "SharePath": "C:\\Scripts",
     "Description": "Hidden Administrative Share for Automation Master",
-    "FullAccessAccount": "Administrators",
-    "emailTo": "justyn.green@gmail.com",
-    "emailFrom": "justyn.green@gmail.com",
-    "appPassword": "fgkk thar zjqq nbzg"
+    "FullAccessAccount": "Administrators"
 }

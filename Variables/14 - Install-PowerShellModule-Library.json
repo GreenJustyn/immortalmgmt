@@ -1,4 +1,4 @@
-﻿{
+{
     "ModulesToInstall": [
         "Send-MailKitMessage",
         "poshmailkit",
@@ -6,8 +6,5 @@
         "Pester"
     ],
     "Force": true,
-    "AcceptLicense": true,
-    "emailTo": "justyn.green@gmail.com",
-    "emailFrom": "justyn.green@gmail.com",
-    "appPassword": "fgkk thar zjqq nbzg"
+    "AcceptLicense": true
 }

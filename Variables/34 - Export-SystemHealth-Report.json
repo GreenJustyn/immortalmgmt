@@ -1,7 +1,4 @@
-﻿{
+{
     "ReportPath": "C:\\Scripts\\Logs\\Health\\HealthReport.html",
-    "DiskWarningThresholdPercent": 15,
-    "emailTo": "justyn.green@gmail.com",
-    "emailFrom": "justyn.green@gmail.com",
-    "appPassword": "fgkk thar zjqq nbzg"
+    "DiskWarningThresholdPercent": 15
 }

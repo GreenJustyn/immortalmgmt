@@ -1,8 +1,9 @@
-﻿{
-    "LogsToConfigure": ["System", "Application", "Security"],
+{
+    "LogsToConfigure": [
+        "System",
+        "Application",
+        "Security"
+    ],
     "MaximumSizeKB": 524288,
-    "OverflowAction": "OverwriteAsNeeded",
-    "emailTo": "justyn.green@gmail.com",
-    "emailFrom": "justyn.green@gmail.com",
-    "appPassword": "fgkk thar zjqq nbzg"
+    "OverflowAction": "OverwriteAsNeeded"
 }

@@ -1,4 +1,4 @@
-﻿$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
 $LogFile     = "C:\Scripts\Logs\$ScriptName.log"
 $ConfigFile  = "C:\Scripts\Variables\$ScriptName.json"
 $CredFile    = "C:\Scripts\Credentials\credential.xml"
@@ -31,7 +31,11 @@ Write-Log "Initializing script execution." -Start
 
 # Load Config
 if (-not (Test-Path $ConfigFile)) { Write-Log "FATAL: Config file missing." "CRITICAL" -End; exit }
-$Config = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $GlobalFile = "C:\Scripts\Variables\_Global.json"
+    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
+    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $Config = $GlobalConfig
+    foreach ($prop in $LocalConfig.psobject.Properties) { $Config.$($prop.Name) = $prop.Value }
 
 # Hostname Idempotent Logic
 $CurrentName = $env:COMPUTERNAME

@@ -1,4 +1,4 @@
-﻿<#
+<#
     .SYNOPSIS
     Pester 5 Compliance Test for Evergreen Windows Server Infrastructure.
     Expects $ScriptsDir and $ConfigDir to be passed via New-PesterContainer.
@@ -53,7 +53,11 @@ BeforeAll {
         throw "FATAL: Config missing at $ConfigFile." 
     }
     # Scoped to script so AfterAll can read the email settings later
-    $Script:Config = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $GlobalFile = "C:\Scripts\Variables\_Global.json"
+    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
+    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $Script:Config = $GlobalConfig
+    foreach ($prop in $LocalConfig.psobject.Properties) { $Script:Config.$($prop.Name) = $prop.Value }
 }
 
 Describe "Infrastructure Automation Codebase Integrity" {

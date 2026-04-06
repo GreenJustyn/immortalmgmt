@@ -1,4 +1,4 @@
-﻿$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
 $LogFile     = "C:\Scripts\Logs\$ScriptName.log"
 $ConfigFile  = "C:\Scripts\Variables\$ScriptName.json"
 $CredFile    = "C:\Scripts\Credentials\credential.xml"
@@ -28,7 +28,11 @@ try {
     if (-not (Test-Path $ConfigFile)) { 
         throw "FATAL: Config missing at $ConfigFile." 
     }
-    $Config = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $GlobalFile = "C:\Scripts\Variables\_Global.json"
+    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
+    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $Config = $GlobalConfig
+    foreach ($prop in $LocalConfig.psobject.Properties) { $Config.$($prop.Name) = $prop.Value }
 
     if (-not (Test-Path $CredFile)) { 
         throw "FATAL: Credential XML missing at $CredFile." 

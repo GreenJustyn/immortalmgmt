@@ -1,7 +1,4 @@
-﻿{
+{
     "InterfaceAlias": "Ethernet",
-    "DnsSuffix": "domain.local",
-    "emailTo": "justyn.green@gmail.com",
-    "emailFrom": "justyn.green@gmail.com",
-    "appPassword": "fgkk thar zjqq nbzg"
+    "DnsSuffix": "domain.local"
 }

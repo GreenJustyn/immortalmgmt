@@ -34,7 +34,11 @@ try {
     if (-not (Test-Path $ConfigFile)) { 
         throw "FATAL: Config missing at $ConfigFile." 
     }
-    $Config = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $GlobalFile = "C:\Scripts\Variables\_Global.json"
+    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
+    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $Config = $GlobalConfig
+    foreach ($prop in $LocalConfig.psobject.Properties) { $Config.$($prop.Name) = $prop.Value }
 
     # Operational Logic
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {

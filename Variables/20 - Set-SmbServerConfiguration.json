@@ -1,7 +1,4 @@
-﻿{
+{
     "EnableSMB1Protocol": false,
-    "RequireSecuritySignature": true,
-    "emailTo": "justyn.green@gmail.com",
-    "emailFrom": "justyn.green@gmail.com",
-    "appPassword": "fgkk thar zjqq nbzg"
+    "RequireSecuritySignature": true
 }

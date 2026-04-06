@@ -1,4 +1,4 @@
-﻿$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
 $LogFile     = "C:\Scripts\Logs\$ScriptName.log"
 $ConfigFile  = "C:\Scripts\Variables\$ScriptName.json"
 $CredFile    = "C:\Scripts\Credentials\credential.xml"
@@ -30,7 +30,11 @@ try {
         Write-Log "FATAL: Config file missing." "CRITICAL"
         throw "Config file missing." 
     }
-    $Config = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $GlobalFile = "C:\Scripts\Variables\_Global.json"
+    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
+    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
+    $Config = $GlobalConfig
+    foreach ($prop in $LocalConfig.psobject.Properties) { $Config.$($prop.Name) = $prop.Value }
 
     # Interface Check
     $Interface = Get-NetAdapter -Name $Config.InterfaceAlias -ErrorAction SilentlyContinue

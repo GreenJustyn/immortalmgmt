@@ -1,7 +1,4 @@
-﻿{
+{
     "InstallDir": "C:\\Scripts\\Installs\\Git",
-    "DownloadDir": "C:\\Scripts\\Temp\\Downloads",
-    "emailTo": "justyn.green@gmail.com",
-    "emailFrom": "justyn.green@gmail.com",
-    "appPassword": "fgkk thar zjqq nbzg"
+    "DownloadDir": "C:\\Scripts\\Temp\\Downloads"
 }

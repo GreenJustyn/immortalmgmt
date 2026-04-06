@@ -1,8 +1,5 @@
-﻿{
+{
     "AccountName": "BreakGlass",
     "AccountDescription": "Emergency Local Administrator",
-    "GroupName": "Administrators",
-    "emailTo": "justyn.green@gmail.com",
-    "emailFrom": "justyn.green@gmail.com",
-    "appPassword": "fgkk thar zjqq nbzg"
+    "GroupName": "Administrators"
 }
