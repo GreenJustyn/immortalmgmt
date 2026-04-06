@@ -56,7 +56,16 @@ try {
     # Operational Logic: Ensure Pester 5 is installed and loaded
     $Pester5 = Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version.Major -ge 5 }
     if (-not $Pester5) {
-        throw "FATAL: Pester version 5 or higher is not installed. Cannot run compliance checks."
+        Write-Log "Pester version 5 or higher not found. Attempting to install from PSGallery..." "INFO"
+        try {
+            # -SkipPublisherCheck is needed because built-in Pester is signed by MS, new is signed by Pester team
+            Install-Module -Name Pester -Force -SkipPublisherCheck -Scope AllUsers -ErrorAction Stop
+            Write-Log "Pester installed successfully." "INFO"
+            # Refresh list
+            $Pester5 = Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version.Major -ge 5 }
+        } catch {
+            throw "FATAL: Failed to install Pester. Please run script 14 or install it manually. Error: $($_.Exception.Message)"
+        }
     }
     
     # Explicitly import the version 5+ module to avoid using the built-in Pester 3.x
