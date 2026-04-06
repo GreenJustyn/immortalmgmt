@@ -88,7 +88,7 @@ try {
             
             if ($LASTEXITCODE -notin @(0, 2)) {
                 # Logged as ERROR so the script continues to the next package, but still triggers an email alert
-                Write-Log "Chocolatey output for $Pkg returned code $LASTEXITCODE: $($Output -join ' ')" "ERROR"
+                Write-Log "Chocolatey output for $Pkg returned code ${LASTEXITCODE}: $($Output -join ' ')" "ERROR"
             } else {
                 Write-Log "Chocolatey output for $Pkg: $($Output -join ' ')" "INFO"
             }
