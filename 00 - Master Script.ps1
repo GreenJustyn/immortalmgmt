@@ -5,10 +5,10 @@ $ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = if ((Split-Path $ScriptDir -Leaf) -eq "Tests") { Split-Path $ScriptDir -Parent } else { $ScriptDir }
 
-$LogFile     = Join-Path $BaseDir "Logs" "$ScriptName.log"
-$configFilePath = Join-Path $BaseDir "Variables" "00 - Master.json"
-$GlobalFile  = Join-Path $BaseDir "Variables" "_Global.json"
-$CredFile    = Join-Path $BaseDir "Credentials" "credential.xml"
+$LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
+$configFilePath = Join-Path (Join-Path $BaseDir "Variables") "00 - Master.json"
+$GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
+$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
     $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
     $LocalConfig = Get-Content -Path $configFilePath -Raw | ConvertFrom-Json
     $config = [PSCustomObject]@{}

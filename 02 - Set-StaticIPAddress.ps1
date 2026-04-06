@@ -2,10 +2,10 @@ $ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = if ((Split-Path $ScriptDir -Leaf) -eq "Tests") { Split-Path $ScriptDir -Parent } else { $ScriptDir }
 
-$LogFile     = Join-Path $BaseDir "Logs" "$ScriptName.log"
-$ConfigFile  = Join-Path $BaseDir "Variables" "$ScriptName.json"
-$GlobalFile  = Join-Path $BaseDir "Variables" "_Global.json"
-$CredFile    = Join-Path $BaseDir "Credentials" "credential.xml"
+$LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
+$ConfigFile  = Join-Path (Join-Path $BaseDir "Variables") "$ScriptName.json"
+$GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
+$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
 $Environment = "#{ENVIRONMENT}#" 
 
 # 1. Native Write-Log Function with Severity Levels

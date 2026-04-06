@@ -6,10 +6,10 @@ if (-not $ScriptName) { $ScriptName = "000_Bootstrap" } # Fallback if run unsave
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = if ((Split-Path $ScriptDir -Leaf) -eq "Tests") { Split-Path $ScriptDir -Parent } else { $ScriptDir }
 
-$LogFile     = Join-Path $BaseDir "Logs" "$ScriptName.log"
-$configFilePath = Join-Path $BaseDir "Variables" "000 - Bootstrap.json"
-$GlobalFile  = Join-Path $BaseDir "Variables" "_Global.json"
-$credFilePath   = Join-Path $BaseDir "Credentials" "bootstrap.xml"
+$LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
+$configFilePath = Join-Path (Join-Path $BaseDir "Variables") "000 - Bootstrap.json"
+$GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
+$credFilePath   = Join-Path (Join-Path $BaseDir "Credentials") "bootstrap.xml"
 $taskUser       = "Administrator" # Change to "DOMAIN\Administrator" or ".\Administrator" if needed
 $Environment    = "#{ENVIRONMENT}#" # GitOps Placeholder
 
