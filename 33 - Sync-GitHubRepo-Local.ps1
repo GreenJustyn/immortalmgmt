@@ -5,7 +5,7 @@ $BaseDir     = if ((Split-Path $ScriptDir -Leaf) -eq "Tests") { Split-Path $Scri
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
 $ConfigFile  = Join-Path (Join-Path $BaseDir "Variables") "$ScriptName.json"
 $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
-$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
+$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "git-credential.xml"
 $Environment = "#{ENVIRONMENT}#"
 
 # 1. Native Write-Log Function with Severity Levels
@@ -44,6 +44,15 @@ try {
     foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
     foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
     $Config = [PSCustomObject]$ConfigHash
+
+    Write-Log "Loaded Configuration Variables:" "INFO"
+    foreach ($prop in $Config.psobject.Properties) {
+        if ($prop.Name -match "Password|Token") {
+            Write-Log "  $($prop.Name) = ********" "INFO"
+        } else {
+            Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
+        }
+    }
 
     # Operational Logic
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
