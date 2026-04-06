@@ -90,7 +90,8 @@ Describe "Infrastructure Automation Codebase Integrity" {
             
             # Explicitly log the failure so the post-flight scanner catches it
             if ($ParseErrors.Count -gt 0) {
-                Write-Log "Syntax error found in $($_.Name)." "ERROR"
+                $ErrMsgs = $ParseErrors | ForEach-Object { $_.Message }
+                Write-Log "Syntax error found in $($_.Name). Details: $($ErrMsgs -join '; ')" "ERROR"
             }
 
             $ParseErrors.Count | Should -Be 0
@@ -163,11 +164,18 @@ Describe "Core Evergreen Infrastructure State" {
 
     Context "Security and Identity" {
         It "Should have the Break-Glass local administrator account" {
-            # Checks for the account created in Script #31
-            $User = Get-LocalUser -Name "LabBreakGlass" -ErrorAction SilentlyContinue
+            # Read account name from config file if available, otherwise fallback
+            $Config30Path = Join-Path $ConfigDir "30 - New-LocalAdminAccount.json"
+            $AccountName = "LabBreakGlass"
+            if (Test-Path $Config30Path) {
+                $Config30 = Get-Content -Path $Config30Path | ConvertFrom-Json
+                $AccountName = $Config30.AccountName
+            }
+            
+            $User = Get-LocalUser -Name $AccountName -ErrorAction SilentlyContinue
             
             if (-not $User -or $User.Enabled -ne $true) {
-                Write-Log "Compliance Failure: LabBreakGlass account is missing or disabled." "CRITICAL"
+                Write-Log "Compliance Failure: $AccountName account is missing or disabled." "CRITICAL"
             }
             
             $User | Should -Not -BeNullOrEmpty
