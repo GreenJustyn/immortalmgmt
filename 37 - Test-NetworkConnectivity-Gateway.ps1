@@ -62,7 +62,8 @@ try {
     $PingResult = Test-Connection -ComputerName $Config.GatewayIP -Count $Config.PingCount -ErrorAction SilentlyContinue
     
     # Cast to array to ensure .Count works even if only 1 ping is returned
-    $SuccessCount = @($PingResult | Where-Object { $_.Status -eq 'Success' }).Count
+    # In PS 5.1, Win32_PingStatus uses StatusCode = 0 for success. In PS 7+, it uses Status = 'Success'.
+    $SuccessCount = @($PingResult | Where-Object { $_.StatusCode -eq 0 -or $_.Status -eq 'Success' }).Count
     $SuccessRate = ($SuccessCount / $Config.PingCount) * 100
 
     if ($SuccessRate -ge $Config.RequiredSuccessRate) {
