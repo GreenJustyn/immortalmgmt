@@ -34,16 +34,9 @@ Function Write-Log {
 try {
     Write-Log "Initializing script execution." -Start
 
-    # Config Check
-    if (-not (Test-Path $ConfigFile)) { 
-        throw "FATAL: Config missing at $ConfigFile." 
-    }
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
-    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $ConfigHash = @{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    $Config = [PSCustomObject]$ConfigHash
+    # Load configuration using the hierarchical helper
+    $Config = . (Join-Path $BaseDir "Functions\Get-ScriptConfig.ps1") -ScriptName $ScriptName
+    
     Write-Log "Loaded Configuration Variables:" "INFO"
     foreach ($prop in $Config.psobject.Properties) {
         if ($prop.Name -match "Password|Token") {
