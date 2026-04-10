@@ -4,7 +4,7 @@ $ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
 if (-not $ScriptName) { $ScriptName = "000_Bootstrap" } # Fallback if run unsaved in ISE/VSCode
 
 $ScriptDir   = $PSScriptRoot
-$BaseDir     = if ((Split-Path $ScriptDir -Leaf) -eq "Tests") { Split-Path $ScriptDir -Parent } else { $ScriptDir }
+$BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
 $configFilePath = Join-Path (Join-Path $BaseDir "Variables") "000 - Bootstrap.json"

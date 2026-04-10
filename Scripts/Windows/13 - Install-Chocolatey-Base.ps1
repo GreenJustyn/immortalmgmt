@@ -1,6 +1,6 @@
 $ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$',''
 $ScriptDir   = $PSScriptRoot
-$BaseDir     = if ((Split-Path $ScriptDir -Leaf) -eq "Tests") { Split-Path $ScriptDir -Parent } else { $ScriptDir }
+$BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
 $ConfigFile  = Join-Path (Join-Path $BaseDir "Variables") "$ScriptName.json"
