@@ -3,7 +3,12 @@ Param(
 )
 
 $FunctionsDir = $PSScriptRoot
-$BaseDir = Split-Path $FunctionsDir -Parent
+if ($FunctionsDir -match "Functions$") {
+    $BaseDir = Split-Path $FunctionsDir -Parent
+} else {
+    # Fallback if someone moved the function
+    $BaseDir = $FunctionsDir
+}
 $VariablesDir = Join-Path $BaseDir "Variables"
 
 # 1. Identity Resolution

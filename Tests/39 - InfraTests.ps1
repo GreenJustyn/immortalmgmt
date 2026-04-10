@@ -41,7 +41,7 @@ Function Write-Log {
 # Variables used in a Describe/It -ForEach loop MUST be defined at 
 # the root level (not in BeforeAll) so Discovery can evaluate them.
 # =====================================================================
-if (-not $ScriptsDir) { $ScriptsDir = "C:\Scripts" }
+if (-not $ScriptsDir) { $ScriptsDir = "C:\Scripts\Scripts\Windows" }
 # Updated default to match your new standard variables folder
 if (-not $ConfigDir) { $ConfigDir = "C:\Scripts\Variables" } 
 
