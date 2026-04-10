@@ -89,11 +89,12 @@ try {
     }
 
     # Verify target script folder exists
-    if (-not (Test-Path $ScriptFolder)) {
-        throw "The script folder $ScriptFolder defined in config does not exist."
+    $TargetScriptFolder = Join-Path $ScriptFolder "Scripts\Windows"
+    if (-not (Test-Path $TargetScriptFolder)) {
+        throw "The script folder $TargetScriptFolder does not exist."
     }
 
-    $scripts = Get-ChildItem -Path $ScriptFolder -Filter "*.ps1" -File
+    $scripts = Get-ChildItem -Path $TargetScriptFolder -Filter "*.ps1" -File
     $baseIntervalMinutes = 2
     $incrementOffset = 0
 
