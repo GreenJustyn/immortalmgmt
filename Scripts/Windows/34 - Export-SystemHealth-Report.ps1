@@ -30,6 +30,24 @@ Function Write-Log {
     if ($End) { "( --- END [$Timestamp] $ScriptName --- )`r`n" | Out-File -FilePath $LogFile -Append }
 }
 
+# --- NEW FEATURE: Disk Scanner Function ---
+Function Get-TopLargestFiles {
+    Param(
+        [Parameter(Mandatory=$true)][string]$DriveLetter
+    )
+    $DrivePath = "$($DriveLetter):\"
+    Write-Log "Initiating deep scan on $DrivePath for the top 5 largest files. This may take a moment..." "INFO"
+    
+    # Scans the drive, ignores access errors, sorts by size, grabs top 5.
+    $TopFiles = Get-ChildItem -Path $DrivePath -File -Recurse -Force -ErrorAction SilentlyContinue |
+        Sort-Object Length -Descending |
+        Select-Object -First 5 |
+        Select-Object DirectoryName, Name, @{Name="SizeMB";Expression={[math]::Round($_.Length / 1MB, 2)}}
+        
+    return $TopFiles
+}
+# ------------------------------------------
+
 # 2. Main Execution Block wrapped in Try/Catch
 try {
     Write-Log "Initializing script execution." -Start
@@ -70,6 +88,20 @@ try {
         if ($Disk.FreePct -lt $Config.DiskWarningThresholdPercent) {
             # Upgraded to ERROR so the post-flight scanner automatically emails you!
             Write-Log "Disk $($Disk.DriveLetter) has less than $($Config.DiskWarningThresholdPercent)% free space ($($Disk.FreePct)% remaining)." "ERROR"
+            
+            # --- NEW FEATURE: Trigger Scan and Log Results ---
+            $TopItems = Get-TopLargestFiles -DriveLetter $Disk.DriveLetter
+            if ($TopItems) {
+                Write-Log "Top 5 largest space consumers on Drive $($Disk.DriveLetter):" "ERROR"
+                $Rank = 1
+                foreach ($Item in $TopItems) {
+                    Write-Log "  $Rank. $($Item.DirectoryName)\$($Item.Name) ($($Item.SizeMB) MB)" "ERROR"
+                    $Rank++
+                }
+            } else {
+                Write-Log "Could not retrieve largest files for Drive $($Disk.DriveLetter). Ensure script is running as Administrator." "WARNING"
+            }
+            # -------------------------------------------------
         }
     }
 
