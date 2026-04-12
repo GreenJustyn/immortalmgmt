@@ -1,107 +1,88 @@
-# Technical Deployment & Bootstrapping Guide
-## For Windows Server 2025 Management Server
+# 🚀 ImmortalMgmt: Multi-System Infrastructure Bootstrapping Guide
 
-This guide provides step-by-step instructions for deploying the **ImmortalMgmt** automation framework onto a fresh Windows Server 2025 management server.
-
----
-
-## 📋 Prerequisites
-
-Before beginning the deployment, ensure the following requirements are met on the target server:
-
-1.  **Operating System**: Windows Server 2025 (Standard or Datacenter).
-2.  **Execution Policy**: Must allow running scripts. Run `Set-ExecutionPolicy RemoteSigned` in an elevated prompt.
-3.  **Permissions**: Full Administrator rights are required.
-4.  **Git**: Git for Windows must be installed and available in the system `PATH`.
-5.  **Internet Connectivity**: Required for downloading packages (via Chocolatey) and syncing with GitHub.
+This enterprise-grade deployment document defines the exact methodology for provisioning the **ImmortalMgmt** GitOps engine onto any fresh Windows Server 2025 target system—designed to scale seamlessly across a fleet of hundreds or thousands of servers.
 
 ---
 
-## 🛠️ Step-by-Step Deployment
+## 📋 1. Pre-Flight Requirements
 
-### Step 1: Initialize the Directory Structure
+Before initiating the bootstrap sequence, verify the target node meets these parameters:
 
-The framework is hardcoded to expect its files in a specific directory structure on the `C:` drive.
+1. 🖥️ **Operating System**: Windows Server 2025 (Standard or Datacenter).
+2. 🔑 **Privileges**: Execution must happen inside a fully elevated Administrator session.
+3. 🛡️ **Execution Policy**: Open an elevated PowerShell prompt and allow script execution:
+   ```powershell
+   Set-ExecutionPolicy RemoteSigned -Force
+   ```
+4. 📦 **Dependencies**: Git for Windows must be installed and globally available in the system `PATH`.
 
-1.  Open an elevated PowerShell prompt.
-2.  Create the base directory:
-    ```powershell
-    New-Item -ItemType Directory -Path "C:\Scripts" -Force
-    ```
+---
 
-### Step 2: Clone the Repository
+## 🛠️ 2. Fleet-Ready Deployment Sequence
 
-Clone the repository into the `C:\Scripts` directory.
+### 📂 Step 1: Establish the Core Path Hierarchy
+The automation framework operates on absolute pathing rooted at `C:\Scripts`. Create the initial directory structures:
 
 ```powershell
-Set-Location -Path "C:\"
+New-Item -ItemType Directory -Path "C:\Scripts\Variables" -Force
+```
+
+---
+
+### 🏷️ Step 2: Provision Node Identity (The Hiera Target)
+Because the codebase is 100% uniform across all systems, each server relies on a small local identity file to know which hierarchical configurations to pull. 
+
+Create `_NodeIdentity.json` on the target server:
+
+```powershell
+$Identity = @{
+    Org = "DefaultOrg"
+    Env = "Production"
+}
+$Identity | ConvertTo-Json | Set-Content -Path "C:\Scripts\Variables\_NodeIdentity.json" -Encoding utf8NoBOM
+```
+
+---
+
+### 📥 Step 3: Retrieve the Source Automation Framework
+Clone the repository down from version control directly into the operational directory:
+
+```powershell
 git clone https://github.com/GreenJustyn/immortalmgmt.git C:\Scripts
 ```
 
-### Step 3: Configure Variables
+---
 
-The scripts rely on external JSON files for configuration. You must create these files in the `C:\Scripts\Variables\` directory.
+### 🔐 Step 4: Secure Local Credentials for Automation
+The automation framework utilizes encrypted XML credentials bound specifically to the user executing the tasks to prevent plain-text credential leaks.
 
-1.  Navigate to `C:\Scripts\Variables`.
-2.  You will find template files or you can create new ones named after the scripts (e.g., `000 - Bootstrap Script.json`).
-3.  Ensure at least the **Bootstrap** and **Sync** configs are populated.
+Generate your GitHub Sync token and the local administrative credentials:
 
-Example for `000 - Bootstrap Script.json`:
-```json
-{
-    "ScriptFolder": "C:\\Scripts",
-    "TaskPath": "\\ImmortalMgmt\\",
-    "EmailFrom": "alerts@yourdomain.com",
-    "EmailTo": "admin@yourdomain.com",
-    "EmailAppPassword": "your-secure-app-password"
-}
-```
-
-### Step 4: Setup Credentials
-
-Some scripts require encrypted credentials. The framework uses Windows DPAPI to secure these in XML files.
-
-#### GitHub Token (Required for Sync Script)
-Follow the instructions in `C:\Scripts\Credentials\01 Github-Token-Setup.md` to generate the `git-credential.xml` file.
-
-#### Bootstrap Credential (Required for Task Scheduling)
-The bootstrap script needs credentials to register scheduled tasks that run as a specific user (e.g., Administrator).
-
-Run the following to create the bootstrap credential:
 ```powershell
-$Credential = Get-Credential
-$Credential.Password | Export-Clixml -Path "C:\Scripts\Credentials\bootstrap.xml"
+# 1. Create the local Administrator credentials (for automated task registration)
+Get-Credential -UserName "Administrator" -Message "Enter local Administrator password" | Export-Clixml -Path "C:\Scripts\Credentials\bootstrap.xml"
+
+# 2. Create the headless Git synchronization credentials (for pulling updates silently)
+Get-Credential -UserName "git" -Message "Paste your GitHub Personal Access Token as the password" | Export-Clixml -Path "C:\Scripts\Credentials\git-credential.xml"
 ```
-*Note: Run this command as the same user account that will execute the scheduled tasks.*
-
-### Step 5: Run the Bootstrap Script
-
-The bootstrap script will scan the `C:\Scripts` folder for all `.ps1` files and register them as Windows Scheduled Tasks under the `\ImmortalMgmt\` folder in Task Scheduler.
-
-1.  Open an elevated PowerShell prompt.
-2.  Execute the script:
-    ```powershell
-    Set-Location -Path "C:\Scripts"
-    .\"000 - Bootstrap Script.ps1"
-    ```
-3.  Check the output for any errors. The script will log its actions to `C:\Scripts\Logs\000_Bootstrap.log`.
 
 ---
 
-## 🔍 Verification
+### ⚡ Step 5: Execute the Bootstrap Engine
+With the configurations and identities staged, run the core bootstrapping engine. This script will discover all 44 automation scripts inside the `Scripts\Windows` directory and permanently register them inside the Windows Task Scheduler.
 
-After running the bootstrap script, verify the deployment:
-
-1.  **Task Scheduler**: Open `taskschd.msc` and verify that a folder named `ImmortalMgmt` exists under the Task Scheduler Library. You should see tasks for all the scripts (e.g., `AutoRun_01 - Set-ComputerName`).
-2.  **Logs**: Check `C:\Scripts\Logs` for successful execution logs.
-3.  **Compliance Tests**: Run the Pester tests to ensure the environment is compliant:
-    ```powershell
-    Invoke-Pester -Path "C:\Scripts\Tests\39 - InfraTests.ps1"
-    ```
+```powershell
+Set-Location "C:\Scripts\Scripts\Windows"
+& '.\000 - Bootstrap Script.ps1'
+```
 
 ---
 
-## ⚠️ Troubleshooting
+## 🎉 Post-Flight Verification
 
-- **Missing Modules**: If scripts fail due to missing modules (like `PoshMailKit`), ensure script `14 - Install-PowerShellModule-Library.ps1` runs or install it manually: `Install-Module PoshMailKit`.
-- **Git Errors**: If the sync script fails, ensure `git-credential.xml` was created by the same user running the task.
+Once the bootstrap engine completes:
+1. 🕒 Open **Task Scheduler** (`taskschd.msc`) and confirm the `\ImmortalMgmt\` folder is populated with scheduled execution items.
+2. 🧪 Run the standard compliance checker to ensure the framework is perfectly seated:
+   ```powershell
+   & '.\39 - Test-Infrastructure-Compliance.ps1'
+   ```
