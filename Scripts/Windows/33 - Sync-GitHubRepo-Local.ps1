@@ -58,7 +58,7 @@ try {
     }
 
     Set-Location -Path $RepoPath
-    git -c credential.helper='' fetch $AuthUrl $Branch | Out-Null
+    $null = git -c credential.helper='' fetch --quiet $AuthUrl $Branch 2>&1
 
     $LOCAL  = (git rev-parse HEAD).Trim()
     $REMOTE = (git rev-parse FETCH_HEAD).Trim()
