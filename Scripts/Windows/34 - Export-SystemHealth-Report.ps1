@@ -48,42 +48,7 @@ Function Get-TopLargestFiles {
 }
 # ------------------------------------------
 
-# --- NEW FEATURE: Auto-Remediate Temp Files ---
-Function Clear-WindowsTemp {
-    Param(
-        [Parameter(Mandatory=$true)][string]$DriveLetter
-    )
-    $OSDrive = $env:SystemDrive.Substring(0,1)
-    
-    # Only execute if the low-space drive is actually the OS drive
-    if ($DriveLetter -eq $OSDrive) {
-        Write-Log "Auto-Remediation: Attempting to clear Windows temporary files on the OS Drive ($DriveLetter:)..." "WARNING"
-        
-        $TempPaths = @(
-            "$env:windir\Temp\*",
-            "$env:TEMP\*"
-        )
-        
-        $InitialSpace = (Get-Volume -DriveLetter $DriveLetter).SizeRemaining
-        
-        foreach ($Path in $TempPaths) {
-            # Silently delete files; running processes will hold locks on some, which we safely skip
-            Get-ChildItem -Path $Path -Recurse -Force -ErrorAction SilentlyContinue | 
-                Where-Object { -not $_.PSIsContainer } | 
-                Remove-Item -Force -ErrorAction SilentlyContinue
-        }
-        
-        $FinalSpace = (Get-Volume -DriveLetter $DriveLetter).SizeRemaining
-        $FreedMB = [math]::Round(($FinalSpace - $InitialSpace) / 1MB, 2)
-        
-        if ($FreedMB -gt 0) {
-            Write-Log "Successfully freed $FreedMB MB by clearing temporary files." "INFO"
-        } else {
-            Write-Log "Temp file cleanup completed, but no significant space was freed (files may be actively in use)." "INFO"
-        }
-    }
-}
-# ----------------------------------------------
+
 
 # 2. Main Execution Block wrapped in Try/Catch
 try {
@@ -125,11 +90,7 @@ try {
         if ($Disk.FreePct -lt $Config.DiskWarningThresholdPercent) {
             Write-Log "Disk $($Disk.DriveLetter) has less than $($Config.DiskWarningThresholdPercent)% free space ($($Disk.FreePct)% remaining)." "ERROR"
             
-            # --- NEW FEATURE TRIGGER: Auto-Remediate if under 15% ---
-            if ($Disk.FreePct -lt 15) {
-                Clear-WindowsTemp -DriveLetter $Disk.DriveLetter
-            }
-            # --------------------------------------------------------
+
 
             # --- PREVIOUS FEATURE TRIGGER: Scan and Log Results ---
             $TopItems = Get-TopLargestFiles -DriveLetter $Disk.DriveLetter
