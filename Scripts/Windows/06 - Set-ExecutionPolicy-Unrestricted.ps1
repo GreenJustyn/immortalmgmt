@@ -30,20 +30,35 @@ Function Write-Log {
     if ($End) { "( --- END [$Timestamp] $ScriptName --- )`r`n" | Out-File -FilePath $LogFile -Append }
 }
 
+# Initialize $Config globally so the 'finally' block can always access it
+$Config = $null
+
 # 2. Main Execution Block wrapped in Try/Catch
 try {
     Write-Log "Initializing script execution." -Start
 
-    # Config Check
+    $ConfigHash = @{}
+
+    # Load Global Config FIRST (ensures we have email settings for alerts)
+    if (Test-Path $GlobalFile) {
+        $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
+        foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
+    }
+    
+    # Assign preliminary config so email settings are available to the finally block
+    $Config = [PSCustomObject]$ConfigHash
+
+    # Local Config Check
     if (-not (Test-Path $ConfigFile)) { 
         throw "FATAL: Config missing at $ConfigFile." 
     }
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
+    
     $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $ConfigHash = @{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
     foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
+    
+    # Finalize the combined Config
     $Config = [PSCustomObject]$ConfigHash
+    
     Write-Log "Loaded Configuration Variables:" "INFO"
     foreach ($prop in $Config.psobject.Properties) {
         if ($prop.Name -match "Password|Token") {
@@ -53,7 +68,7 @@ try {
         }
     }
 
-    # Credential Check (included if your downstream logic requires it)
+    # Credential Check
     if (-not (Test-Path $CredFile)) { 
         throw "FATAL: Credential XML missing at $CredFile." 
     }
@@ -108,7 +123,7 @@ try {
             Write-Log "$($errorLines.Count) error(s) found. Attempting to send email alert..." "INFO"
             
             try {
-                # Ensure these are populated in your JSON config
+                # Read from the $Config object (which will now exist even if the local file failed)
                 $appPassword = $Config.EmailAppPassword 
                 $emailFrom   = $Config.EmailFrom
                 $emailTo     = $Config.EmailTo
