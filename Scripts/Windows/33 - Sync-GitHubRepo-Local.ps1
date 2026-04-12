@@ -90,8 +90,8 @@ try {
             Write-Log "Syncing $Folder..." "INFO"
             if (-not (Test-Path $Dest)) { New-Item -ItemType Directory -Path $Dest -Force | Out-Null }
             
-            # /E = Subfolders, /XO = Skip older, /PURGE = Delete if not in source (optional - remove if you want to keep local-only files)
-            robocopy $Source $Dest *.* /E /XO /NDL /NFL /NJH /NJS
+            # /E = Subfolders, ## Removed /XO for now (/XO = Skip older), /PURGE = Delete if not in source (optional - remove if you want to keep local-only files)
+            robocopy $Source $Dest *.* /E /NDL /NFL /NJH /NJS
             if ($LASTEXITCODE -ge 8) { Write-Log "Robocopy for $Folder failed with code $LASTEXITCODE" "ERROR" }
         }
     }
