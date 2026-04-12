@@ -154,6 +154,25 @@ try {
         throw "Failed to generate HTML report. $($_.Exception.Message)"
     }
 
+    # --- NEW FEATURE: Purge User Temp Files (7-Day Valve Flag) ---
+    $UserTempDir = "$env:USERPROFILE\AppData\Local\Temp"
+    if (Test-Path $UserTempDir) {
+        $CutoffDate = (Get-Date).AddDays(-7)
+        
+        # Valve Check: Does the folder contain any files older than 7 days?
+        $AgedItems = Get-ChildItem -Path $UserTempDir -Recurse -Force -ErrorAction SilentlyContinue | 
+            Where-Object { $_.LastWriteTime -lt $CutoffDate }
+            
+        if ($AgedItems) {
+            Write-Log "Valve Flag Triggered: Content older than 7 days detected in $UserTempDir. Purging aged files..." "INFO"
+            $AgedItems | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+            Write-Log "Aged temporary user files successfully purged." "INFO"
+        } else {
+            Write-Log "Valve Flag Safe: All contents in $UserTempDir are less than 7 days old. Skipping purge." "INFO"
+        }
+    }
+    # -------------------------------------------------------------
+
 } catch {
     # Catch any terminating errors and log them
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
