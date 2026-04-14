@@ -8,81 +8,46 @@ $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
 $CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
 $Environment = "#{ENVIRONMENT}#" # GitOps Placeholder
 
-# Unified and updated logging function
 Function Write-Log {
     Param(
-        [Parameter(Mandatory=$true, Position=0)]
-        [string]$Message,
-        
-        [Parameter(Position=1)]
-        [ValidateSet("INFO", "WARNING", "ERROR", "CRITICAL")]
-        [string]$Level = "INFO",
-        
-        [switch]$Start, 
-        [switch]$End
+        [Parameter(Mandatory=$true, Position=0)] [string]$Message,
+        [Parameter(Position=1)] [ValidateSet("INFO", "WARNING", "ERROR", "CRITICAL")] [string]$Level = "INFO",
+        [switch]$Start, [switch]$End
     )
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    
     if ($Start) { "( --- START [$Timestamp] $ScriptName --- )" | Out-File -FilePath $LogFile -Append -Force }
     "[$Timestamp] [$Level] [$Environment] $Message" | Out-File -FilePath $LogFile -Append -Force
     if ($End) { "( --- END [$Timestamp] $ScriptName --- )`r`n" | Out-File -FilePath $LogFile -Append -Force }
 }
 
-Write-Log "Initializing script execution: BIOS Inventory Validation." -Start
-
-# Load Config Safely
-if (Test-Path $ConfigFile) {
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
-    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $ConfigHash = @{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    $Config = [PSCustomObject]$ConfigHash
-}
+Write-Log "Initializing absolute Recycle Bin deletion sequence..." -Start
 
 # =====================================================================
-# Admin Prerequisite Gate
+# Role Authorization
 # =====================================================================
 if (-not $IsLinux) {
     $user = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = (New-Object Security.Principal.WindowsPrincipal $user)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
-        Write-Log "⚠️ ERROR: Administrative privileges required to query local WMI classes." "CRITICAL"
+        Write-Log "⚠️ WARNING: Purging global system bins securely operates optimally over Administrator states." "WARNING"
     }
 }
 
 # =====================================================================
-# BIOS Validation Block
+# Purge Routine
 # =====================================================================
 try {
-    if ($IsLinux) {
-        $model = (sudo dmidecode -s system-product-name)
-        if ("$model" -eq "") { Write-Log "No Linux DMIDECODE details." "WARNING"; exit 0 }
-        
-        $version = (sudo dmidecode -s bios-version)
-        $releaseDate = (sudo dmidecode -s bios-release-date)
-        $manufacturer = (sudo dmidecode -s system-manufacturer)
-    } else {
-        $details = Get-CimInstance -ClassName Win32_BIOS
-        $model = $details.Name.Trim()
-        $version = $details.Version.Trim()
-        $serial = $details.SerialNumber.Trim()
-        $manufacturer = $details.Manufacturer.Trim()
-    }
+    Write-Log "Triggering unconfirmed Clear-RecycleBin pipeline." "INFO"
+    Clear-RecycleBin -Confirm:$false -ErrorAction Stop
+    if ($lastExitCode -and $lastExitCode -ne 0) { throw "Underlying clear operation failed on bin nodes." }
 
-    if ($model -eq "To be filled by O.E.M.") { $model = "N/A" }
-    if ($version -eq "To be filled by O.E.M.") { $version = "N/A" }
-    if ("$releaseDate" -ne "") { $releaseDate = " of $releaseDate" }
-    if ("$serial" -eq "") { $serial = "N/A" }
-    if ($serial -eq "To be filled by O.E.M.") { $serial = "N/A" }
-
-    Write-Log "✅ BIOS model $model, version $($version)$($releaseDate), S/N $serial by $manufacturer" "INFO"
+    Write-Log "✅ Global trash bin partitions cleared cleanly." "INFO"
 } catch {
     Write-Log "⚠️ ERROR: $($Error[0]) (script line $($_.InvocationInfo.ScriptLineNumber))" "CRITICAL"
-}	
+}
 
 # =====================================================================
-# Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
+# Post-Flight Mail Alerts
 # =====================================================================
 if (Test-Path $LogFile) {
     Write-Log "Scanning $LogFile for automated exceptions..." "INFO"
@@ -124,4 +89,4 @@ if (Test-Path $LogFile) {
     }
 }
 
-Write-Log "Routine Check finished successfully." "INFO" -End
+Write-Log "Maintenance cycle complete." "INFO" -End

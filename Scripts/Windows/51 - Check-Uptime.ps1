@@ -155,7 +155,7 @@ if (Test-Path $LogFile) {
 
             $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
             $credential = New-Object System.Management.Automation.PSCredential ($emailFrom, $secPassword)
-            $emailBody = "Trigger Warning recorded on $ScriptName:`n`n" + ($errorLines -join "`n")
+            $emailBody = "Trigger Warning recorded on ${ScriptName}:`n`n" + ($errorLines -join "`n")
             
             try {
                 Import-Module PoshMailKit -ErrorAction SilentlyContinue

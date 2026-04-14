@@ -81,8 +81,11 @@ try {
         $status = "INFO"
         $modelName = $details.model_name
         $protocol = $details.device.protocol
-        [int64]$bytes = $details.user_capacity.bytes
-        $capacity = ($bytes -gt 0) ? "$(Bytes2String $bytes) " : ""
+        if ($bytes -gt 0) {
+            $capacity = "$(Bytes2String $bytes) "
+        } else {
+            $capacity = ""
+        }
         
         $infos = ""
         if ($details.temperature.current -gt 50) {
