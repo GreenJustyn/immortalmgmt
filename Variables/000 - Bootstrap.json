@@ -3,19 +3,289 @@
     "TaskPath": "\\JustynScripts",
     "ScriptsConfig": [
         {
-            "ScriptName": "000 - Bootstrap Script.ps1",
-            "IntervalMinutes": 10080,
-            "StartOffsetMinutes": 5
-        },
-        {
             "ScriptName": "00 - Master Script.ps1",
             "IntervalMinutes": 2,
             "StartOffsetMinutes": 2
         },
         {
+            "ScriptName": "000 - Bootstrap Script.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "01 - Set-ComputerName.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "02 - Set-StaticIPAddress.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "03 - Add-DomainUser-ToLocalGroup.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "04 - Set-DnsClientServerAddress.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "05 - Disable-NetIPv6.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "06 - Set-ExecutionPolicy-Unrestricted.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "07 - Enable-PSRemoting.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "08 - Set-TimeZone.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "09 - Enable-RemoteDesktop.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "10 - Set-PowerPlan-HighPerformance.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "11 - Disable-WindowsErrorReporting.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "12 - Install-NuGetProvider.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "13 - Install-Chocolatey-Base.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "14 - Install-PowerShellModule-Library.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "15 - Update-ChocolateyPackages.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "16 - Install-WindowsFeature-HyperV.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "17 - Initialize-DataDisks.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "18 - Set-DiskQuota.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "19 - New-SmbShare-Admin.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "20 - Set-SmbServerConfiguration.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "21 - Clear-TempFiles-System.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "22 - Install-WindowsUpdate-Scheduled.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "23 - Set-Service-AutomaticDelayed.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "24 - Update-Help-Local.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "25 - Set-Reg-DisableWallpaper.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "26 - Set-Reg-ShowFileExtensions.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "27 - Disable-WindowsSearchIndexing.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "28 - Set-EventLog-Retention.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "29 - New-EventLog-CustomSource.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "30 - New-LocalAdminAccount.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "31 - Test-ServiceStatus-Critical.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "32 - Set-DnsClientSuffix.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "33 - Sync-GitHubRepo-Local.ps1",
+            "IntervalMinutes": 60,
+            "StartOffsetMinutes": 6
+        },
+        {
+            "ScriptName": "34 - Export-SystemHealth-Report.ps1",
+            "IntervalMinutes": 15,
+            "StartOffsetMinutes": 6
+        },
+        {
+            "ScriptName": "35 - Set-AutoLogon-Admin.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 12
+        },
+        {
+            "ScriptName": "36 - Write-AutomationManifest.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 15
+        },
+        {
+            "ScriptName": "37 - Test-Infrastructure-Compliance.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 15
+        },
+        {
+            "ScriptName": "38 - Set-Reg-ExplorerQuickAccess.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "39 - Test-Infrastructure-Compliance.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "40 - Check-AdminAccount.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "41 - Check-Bios.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "42 - Check-CPU.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "43 - Check-FileSystem.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "44 - Check-MAC-Address.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 19
+        },
+        {
+            "ScriptName": "45 - Check-OS.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "46 - Check-Pending-Reboot.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 1
+        },
+        {
+            "ScriptName": "47 - Check-RAM.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "48 - Check-Smart-Devices.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "49 - Check-Swap-Space.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 1
+        },
+        {
+            "ScriptName": "50 - Check-Timezone.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 1
+        },
+        {
+            "ScriptName": "51 - Check-Uptime.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 1
+        },
+        {
+            "ScriptName": "52 - Clear-RecycleBin.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "53 - Query-SMART-Devices.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "98 - Git Script.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 25
+        },
+        {
             "ScriptName": "99 - Daily Maintenance Clean Up Script.ps1",
             "IntervalMinutes": 1440,
-            "StartOffsetMinutes": 0
+            "StartOffsetMinutes": 30
         }
     ]
 }
