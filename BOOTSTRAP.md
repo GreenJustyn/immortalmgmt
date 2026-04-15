@@ -53,7 +53,17 @@ git clone https://github.com/GreenJustyn/immortalmgmt.git C:\Scripts
 
 ---
 
-### 🔐 Step 4: Secure Local Credentials for Automation
+### 🖥️ Step 4: Initialize Host Variables (OOB Configuration)
+Before registering automation tasks, initialize host-specific variables automatically:
+
+```powershell
+Set-Location "C:\Scripts"
+& '.\install.ps1'
+```
+
+---
+
+### 🔐 Step 5: Secure Local Credentials for Automation
 The automation framework utilizes encrypted XML credentials bound specifically to the user executing the tasks to prevent plain-text credential leaks.
 
 Generate your GitHub Sync token and the local administrative credentials:
@@ -68,8 +78,8 @@ Get-Credential -UserName "git" -Message "Paste your GitHub Personal Access Token
 
 ---
 
-### ⚡ Step 5: Execute the Bootstrap Engine
-With the configurations and identities staged, run the core bootstrapping engine. This script will discover all 44 automation scripts inside the `Scripts\Windows` directory and permanently register them inside the Windows Task Scheduler.
+### ⚡ Step 6: Execute the Bootstrap Engine
+With the configurations and identities staged, run the core bootstrapping engine. This script will discover operational automation scripts inside the `Scripts\Windows` directory and permanently register them inside the Windows Task Scheduler.
 
 ```powershell
 Set-Location "C:\Scripts\Scripts\Windows"

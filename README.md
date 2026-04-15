@@ -25,9 +25,13 @@ immortalmgmt/
   ├── Logs/              # Standardized system logging
   ├── Scripts/           
   │   ├── Linux/         # Future Linux execution routines
-  │   └── Windows/       # All 44 Windows automated operational scripts
+  │   └── Windows/       # Over 50 Windows automated operational scripts
   ├── Tests/             # Pester compliance test scripts
-  └── Variables/         # The layered configuration files (.json)
+  ├── Variables/         # The layered configuration files (.json)
+  ├── install.ps1        # Out-Of-Box host initialization & variable discovery
+  ├── powershell_commander.ps1 # PowerShell GUI command center launcher
+  └── powershell_commander.py  # GUI Application orchestration logic
+
 ```
 
 ---
