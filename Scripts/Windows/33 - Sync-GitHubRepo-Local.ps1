@@ -64,13 +64,11 @@ try {
     $REMOTE = (git rev-parse FETCH_HEAD).Trim()
 
     if ($LOCAL -eq $REMOTE) {
-        Write-Log "Local and Remote match ($LOCAL). Exiting." "INFO"
-        return # Terminate script early as requested
+        Write-Log "Local and Remote match ($LOCAL). Proceeding with file replication." "INFO"
+    } else {
+        Write-Log "Updates detected. Syncing staging folder..." "INFO"
+        git -c credential.helper='' reset --hard FETCH_HEAD 2>&1
     }
-
-    # 4. Sync Staging Folder
-    Write-Log "Updates detected. Syncing staging folder..." "INFO"
-    git -c credential.helper='' reset --hard FETCH_HEAD 2>&1
 
     # 5. File Replication to Operating Folders
     # Defined per your requirements using <BaseDir>
