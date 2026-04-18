@@ -94,6 +94,14 @@ try {
         }
     }
 
+    # 6. Sync Specific Root Files
+    Write-Log "Syncing root files..." "INFO"
+    $RootFiles = @("BOOTSTRAP.md", "README.md", "install.ps1", "powershell_commander.ps1", "*.py")
+    foreach ($FileSpec in $RootFiles) {
+        robocopy $RepoPath $BaseDir $FileSpec /NDL /NFL /NJH /NJS
+        if ($LASTEXITCODE -ge 8) { Write-Log "Robocopy for root file spec $FileSpec failed with code $LASTEXITCODE" "ERROR" }
+    }
+
     Write-Log "Deployment routines completed successfully." "INFO"
 
 } catch {
