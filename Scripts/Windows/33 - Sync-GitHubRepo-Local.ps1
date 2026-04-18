@@ -63,44 +63,14 @@ try {
     $LOCAL  = (git rev-parse HEAD).Trim()
     $REMOTE = (git rev-parse FETCH_HEAD).Trim()
 
-    if ($LOCAL -eq $REMOTE) {
-        Write-Log "Local and Remote match ($LOCAL). Proceeding with file replication." "INFO"
-    } else {
-        Write-Log "Updates detected. Syncing staging folder..." "INFO"
-        git -c credential.helper='' reset --hard FETCH_HEAD 2>&1
-    }
+    Write-Log "Local: $LOCAL, Remote: $REMOTE" "INFO"
+    Write-Log "Syncing staging folder to remote state..." "INFO"
+    git -c credential.helper='' reset --hard FETCH_HEAD 2>&1
 
     # 5. File Replication to Operating Folders
-    # Defined per your requirements using <BaseDir>
-    $SyncMap = @{
-        "Credentials" = Join-Path $BaseDir "Credentials"
-        "Functions"   = Join-Path $BaseDir "Functions"
-        "Scripts"     = Join-Path $BaseDir "Scripts"
-        "Tests"       = Join-Path $BaseDir "Tests"
-        "Variables"   = Join-Path $BaseDir "Variables"
-    }
-
-    foreach ($Folder in $SyncMap.Keys) {
-        $Source = Join-Path $RepoPath $Folder
-        $Dest   = $SyncMap[$Folder]
-
-        if (Test-Path $Source) {
-            Write-Log "Syncing $Folder..." "INFO"
-            if (-not (Test-Path $Dest)) { New-Item -ItemType Directory -Path $Dest -Force | Out-Null }
-            
-            # /E = Subfolders, ## Removed /XO for now (/XO = Skip older), /PURGE = Delete if not in source (optional - remove if you want to keep local-only files)
-            robocopy $Source $Dest *.* /E /NDL /NFL /NJH /NJS
-            if ($LASTEXITCODE -ge 8) { Write-Log "Robocopy for $Folder failed with code $LASTEXITCODE" "ERROR" }
-        }
-    }
-
-    # 6. Sync Specific Root Files
-    Write-Log "Syncing root files..." "INFO"
-    $RootFiles = @("BOOTSTRAP.md", "README.md", "install.ps1", "powershell_commander.ps1", "*.py")
-    foreach ($FileSpec in $RootFiles) {
-        robocopy $RepoPath $BaseDir $FileSpec /NDL /NFL /NJH /NJS
-        if ($LASTEXITCODE -ge 8) { Write-Log "Robocopy for root file spec $FileSpec failed with code $LASTEXITCODE" "ERROR" }
-    }
+    Write-Log "Syncing all files from staging to base directory..." "INFO"
+    robocopy $RepoPath $BaseDir *.* /E /XD .git Git /NDL /NFL /NJH /NJS
+    if ($LASTEXITCODE -ge 8) { Write-Log "Robocopy failed with code $LASTEXITCODE" "ERROR" }
 
     Write-Log "Deployment routines completed successfully." "INFO"
 
