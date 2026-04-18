@@ -80,6 +80,31 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 
+# Check for Shortcut
+$ShortcutPath = Join-Path ([Environment]::GetFolderPath("CommonDesktopDirectory")) "Powershell_Commander.lnk"
+$IconPath = Join-Path $ScriptDir "Image\powershell_commander.ico"
+
+if (-not (Test-Path $ShortcutPath)) {
+    Write-Host "Creating All Users Desktop Shortcut..." -ForegroundColor Cyan
+    try {
+        $WshShell = New-Object -ComObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
+        $Shortcut.TargetPath = "powershell.exe"
+        $Shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptDir\powershell_commander.ps1`""
+        
+        if (Test-Path $IconPath) {
+            $Shortcut.IconLocation = $IconPath
+        }
+        
+        $Shortcut.WorkingDirectory = $ScriptDir
+        $Shortcut.Save()
+        Write-Host "Shortcut created successfully." -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to create All Users shortcut. You may need to run as Administrator." -ForegroundColor Warning
+        Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Warning
+    }
+}
+
 # Launch the application
 Write-Host "Starting PowerShell Commander..." -ForegroundColor Green
 $pythonwCmd = Join-Path (Split-Path $pythonCmd) "pythonw.exe"
