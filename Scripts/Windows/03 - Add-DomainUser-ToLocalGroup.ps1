@@ -1,5 +1,3 @@
-# Requires -RunAsAdministrator
-
 $ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
 if (-not $ScriptName) { $ScriptName = "000_Bootstrap" } # Fallback if run unsaved in ISE/VSCode
 

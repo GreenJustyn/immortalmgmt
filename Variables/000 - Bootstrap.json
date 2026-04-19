@@ -39,11 +39,13 @@
         },
         {
             "ScriptName": "06 - Set-ExecutionPolicy-Unrestricted.ps1",
+            "LinuxName": "06 - Ensure-Scripts-Executable.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
         {
             "ScriptName": "07 - Enable-PSRemoting.ps1",
+            "LinuxName": "07 - Enable-SSH-Service.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
@@ -54,6 +56,7 @@
         },
         {
             "ScriptName": "09 - Enable-RemoteDesktop.ps1",
+            "LinuxName": "09 - Enable-XRDP-Service.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
@@ -64,16 +67,19 @@
         },
         {
             "ScriptName": "11 - Disable-WindowsErrorReporting.ps1",
+            "LinuxName": "11 - Disable-Crash-Reporting.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
         {
             "ScriptName": "12 - Install-NuGetProvider.ps1",
+            "LinuxName": "12 - Ensure-Python-Pip.sh",
             "IntervalMinutes": 1440,
             "StartOffsetMinutes": 5
         },
         {
             "ScriptName": "13 - Install-Chocolatey-Base.ps1",
+            "LinuxName": "13 - Install-Homebrew.sh",
             "IntervalMinutes": 1440,
             "StartOffsetMinutes": 5
         },
@@ -84,11 +90,13 @@
         },
         {
             "ScriptName": "15 - Update-ChocolateyPackages.ps1",
+            "LinuxName": "15 - Update-System-Packages.sh",
             "IntervalMinutes": 1440,
             "StartOffsetMinutes": 5
         },
         {
             "ScriptName": "16 - Install-WindowsFeature-HyperV.ps1",
+            "LinuxName": "16 - Install-KVM-Virtualization.sh",
             "IntervalMinutes": 1440,
             "StartOffsetMinutes": 5
         },
@@ -104,11 +112,13 @@
         },
         {
             "ScriptName": "19 - New-SmbShare-Admin.ps1",
+            "LinuxName": "19 - Create-Samba-Share.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
         {
             "ScriptName": "20 - Set-SmbServerConfiguration.ps1",
+            "LinuxName": "20 - Configure-Samba-Server.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
@@ -124,6 +134,7 @@
         },
         {
             "ScriptName": "23 - Set-Service-AutomaticDelayed.ps1",
+            "LinuxName": "23 - Delay-Systemd-Service-Start.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
@@ -134,6 +145,7 @@
         },
         {
             "ScriptName": "25 - Set-Reg-DisableWallpaper.ps1",
+            "LinuxName": "25 - Disable-Desktop-Wallpaper.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
@@ -144,16 +156,19 @@
         },
         {
             "ScriptName": "27 - Disable-WindowsSearchIndexing.ps1",
+            "LinuxName": "27 - Disable-Locate-Indexing.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
         {
             "ScriptName": "28 - Set-EventLog-Retention.ps1",
+            "LinuxName": "28 - Configure-Journald-Retention.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
         {
             "ScriptName": "29 - New-EventLog-CustomSource.ps1",
+            "LinuxName": "29 - Register-Syslog-Source.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
@@ -184,6 +199,7 @@
         },
         {
             "ScriptName": "35 - Set-AutoLogon-Admin.ps1",
+            "LinuxName": "35 - Configure-GDM3-AutoLogon.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 12
         },
@@ -199,6 +215,7 @@
         },
         {
             "ScriptName": "38 - Set-Reg-ExplorerQuickAccess.ps1",
+            "LinuxName": "38 - Disable-Recent-Files-Tracking.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
@@ -269,6 +286,7 @@
         },
         {
             "ScriptName": "52 - Clear-RecycleBin.ps1",
+            "LinuxName": "52 - Clear-Trash-Folder.sh",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
         },
