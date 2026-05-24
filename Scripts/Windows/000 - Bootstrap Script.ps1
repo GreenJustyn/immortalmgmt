@@ -118,7 +118,12 @@ try {
                 $taskName = "$($script.BaseName)-immortalmgmt"
 
                 # Strict check: If task exists, skip it entirely
-                $existingTask = Get-ScheduledTask -TaskName $taskName -TaskPath $TaskPath -ErrorAction SilentlyContinue
+                $existingTask = $null
+                try {
+                    $existingTask = Get-ScheduledTask -TaskName $taskName -TaskPath $TaskPath -ErrorAction Stop
+                } catch {
+                    # Task or folder does not exist yet, which is fine
+                }
 
                 if ($existingTask) {
                     Write-Log "Task '$taskName' already exists. Skipping." "INFO"
