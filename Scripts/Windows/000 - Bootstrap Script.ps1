@@ -133,7 +133,12 @@ try {
             $incrementOffset = 0
 
             foreach ($script in $scripts) {
-                $taskName = "$($script.BaseName)-immortalmgmt"
+                $isCustom = $manifestSettings.ContainsKey($script.Name)
+                $taskNamePrefix = $script.BaseName
+                if ($isCustom -and $null -ne $manifestSettings[$script.Name].DisplayName) {
+                    $taskNamePrefix = $manifestSettings[$script.Name].DisplayName
+                }
+                $taskName = "$taskNamePrefix-immortalmgmt"
 
                 # Strict check: If task exists, skip it entirely
                 $existingTask = $null
@@ -149,7 +154,6 @@ try {
                 }
 
                 # Determine Timer Settings
-                $isCustom = $manifestSettings.ContainsKey($script.Name)
                 $startOffset = 5 
 
                 if ($isCustom) {
