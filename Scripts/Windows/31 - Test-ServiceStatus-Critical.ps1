@@ -1,4 +1,6 @@
-$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$',''
+# 1. Native Write-Log Function with Severity Levels
+
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$'',''
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 
@@ -8,7 +10,6 @@ $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
 $CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
 $Environment = "#{ENVIRONMENT}#"
 
-# 1. Native Write-Log Function with Severity Levels
 Function Write-Log {
     Param(
         [Parameter(Mandatory=$true, Position=0)][string]$Message,
@@ -19,10 +20,8 @@ Function Write-Log {
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     
     if ($Start) { "( --- START [$Timestamp] $ScriptName --- )" | Out-File -FilePath $LogFile -Append }
-    
     "[$Timestamp] [$Level] [$Environment] $Message" | Out-File -FilePath $LogFile -Append
     
-    # Optional console output for manual runs
     if ($Level -eq "ERROR" -or $Level -eq "CRITICAL") { Write-Host "[$Level] $Message" -ForegroundColor Red }
     elseif ($Level -eq "WARNING") { Write-Host "[$Level] $Message" -ForegroundColor Yellow }
     else { Write-Host "[$Level] $Message" -ForegroundColor Gray }
@@ -30,58 +29,57 @@ Function Write-Log {
     if ($End) { "( --- END [$Timestamp] $ScriptName --- )`r`n" | Out-File -FilePath $LogFile -Append }
 }
 
-# 2. Main Execution Block wrapped in Try/Catch
+Write-Log "Initializing script execution." -Start
+
+# Load configuration using the Hiera helper
+$Config = . (Join-Path $BaseDir "Functions\Get-ScriptConfig.ps1") -ScriptName $ScriptName
+
+Write-Log "Loaded Configuration Variables:" "INFO"
+foreach ($prop in $Config.psobject.Properties) {
+    if ($prop.Name -match "Password|Token") {
+        Write-Log "  $($prop.Name) = ********" "INFO"
+    } else {
+        Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
+    }
+}
+
+$scriptExitCode = 0
+
 try {
-    Write-Log "Initializing script execution." -Start
+    $scriptExitCode = 0
 
-    # Config Check
-    if (-not (Test-Path $ConfigFile)) { 
-        throw "FATAL: Config missing at $ConfigFile." 
-    }
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
-    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $ConfigHash = @{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    $Config = [PSCustomObject]$ConfigHash
-    Write-Log "Loaded Configuration Variables:" "INFO"
-    foreach ($prop in $Config.psobject.Properties) {
-        if ($prop.Name -match "Password|Token") {
-            Write-Log "  $($prop.Name) = ********" "INFO"
-        } else {
-            Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
-        }
-    }
+    try {
+        # Operational Logic
+            foreach ($Svc in $Config.CriticalServices) {
+                $ServiceObj = Get-Service -Name $Svc -ErrorAction SilentlyContinue
 
-    # Operational Logic
-    foreach ($Svc in $Config.CriticalServices) {
-        $ServiceObj = Get-Service -Name $Svc -ErrorAction SilentlyContinue
-        
-        if (-not $ServiceObj -or $ServiceObj.Status -ne 'Running') {
-            
-            # Logged as CRITICAL: Will automatically trigger the post-flight email
-            Write-Log "Service '$Svc' is not running. Attempting recovery..." "CRITICAL"
-            
-            # Attempt recovery
-            try {
-                Start-Service -Name $Svc -ErrorAction Stop
-                Write-Log "Successfully restarted service '$Svc'." "INFO"
-            } catch {
-                # Logged as ERROR: Will automatically trigger the post-flight email
-                Write-Log "Failed to restart service '$Svc'. Requires manual intervention. $($_.Exception.Message)" "ERROR"
+                if (-not $ServiceObj -or $ServiceObj.Status -ne 'Running') {
+
+                    # Logged as CRITICAL: Will automatically trigger the post-flight email
+                    Write-Log "Service '$Svc' is not running. Attempting recovery..." "CRITICAL"
+
+                    # Attempt recovery
+                    try {
+                        Start-Service -Name $Svc -ErrorAction Stop
+                        Write-Log "Successfully restarted service '$Svc'." "INFO"
+                    } catch {
+                        # Logged as ERROR: Will automatically trigger the post-flight email
+                        Write-Log "Failed to restart service '$Svc'. Requires manual intervention. $($_.Exception.Message)" "ERROR"
+                    }
+                } else {
+                    Write-Log "Service '$Svc' is running normally." "INFO"
+                }
             }
-        } else {
-            Write-Log "Service '$Svc' is running normally." "INFO"
-        }
-    }
-
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    } finally {
 } catch {
-    # Catch any terminating script-level errors and log them
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
-
+    $scriptExitCode = 1
 } finally {
     # =====================================================================
-    # 3. Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
+    # Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
     # =====================================================================
     if (Test-Path $LogFile) {
         Write-Log "Scanning $LogFile for errors in the last 5 minutes..." "INFO"
@@ -91,7 +89,6 @@ try {
         $logContents = Get-Content -Path $LogFile
         
         foreach ($line in $logContents) {
-            # Parse [Date] [Level] [Environment] Message
             if ($line -match "^\[(.*?)\] \[(.*?)\] \[(.*?)\] (.*)") {
                 $logDateStr = $matches[1]
                 $logLevel   = $matches[2]
@@ -108,7 +105,6 @@ try {
             Write-Log "$($errorLines.Count) error(s) found. Attempting to send email alert..." "INFO"
             
             try {
-                # Ensure these are populated in your JSON config (Standardized to match your Master JSON)
                 $appPassword = $Config.EmailAppPassword 
                 $emailFrom   = $Config.EmailFrom
                 $emailTo     = $Config.EmailTo
@@ -117,10 +113,21 @@ try {
                     throw "Email configuration missing from JSON config."
                 }
 
+                if (-not (Get-Module -ListAvailable -Name PoshMailKit)) {
+                    Write-Log "PoshMailKit module is not installed. Attempting installation..." "WARNING"
+                    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
+                } else {
+                    Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
+                    Update-Module -Name PoshMailKit -Force -Scope CurrentUser -ErrorAction SilentlyContinue
+                }
+
                 $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
                 $credential = New-Object System.Management.Automation.PSCredential ($emailFrom, $secPassword)
                 
-                $emailBody = "The following service failures or script errors were detected in the $ScriptName run:`n`n" + ($errorLines -join "`n")
+                $emailBody = "The following errors were detected in the $ScriptName run:`n`n" + ($errorLines -join "`n")
                 
                 Import-Module PoshMailKit -ErrorAction Stop
                 Send-MKMailMessage -To $emailTo `
@@ -144,4 +151,8 @@ try {
     }
 
     Write-Log "Script execution completed." -End
+}
+
+if ($scriptExitCode -ne 0) {
+    exit $scriptExitCode
 }

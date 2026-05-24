@@ -44,23 +44,20 @@ import smtplib
 from email.mime.text import MIMEText
 
 log_file = sys.argv[1]
-global_file = sys.argv[2]
+config_json_str = sys.argv[2]
 script_name = sys.argv[3]
 
-# Load global config for email
 try:
-    with open(global_file, "r") as f:
-        config = json.load(f)
-except Exception as e:
-    print(f"CRITICAL: Failed to load global config: {e}")
-    sys.exit(1)
+    config = json.loads(config_json_str)
+except Exception:
+    config = {}
 
 email_to = config.get("EmailTo")
 email_from = config.get("EmailFrom")
 app_password = config.get("EmailAppPassword")
 
 if not all([email_to, email_from, app_password]):
-    print("WARNING: Email config missing in _Global.json.")
+    print("WARNING: Email alerting is not configured in _Global.json.")
     sys.exit(0)
 
 threshold = datetime.datetime.now() - datetime.timedelta(minutes=5)
@@ -85,7 +82,7 @@ except Exception as e:
 
 if errors:
     print(f"INFO: Found {len(errors)} errors. Sending email...")
-    body = f"The following errors were detected in the {script_name} run:\n\n" + "".join(errors)
+    body = f"The following errors/alerts were detected in the {script_name} run:\n\n" + "".join(errors)
     msg = MIMEText(body)
     msg["Subject"] = f"Script Alert: {script_name} Errors Detected"
     msg["From"] = email_from
@@ -100,7 +97,7 @@ if errors:
         print("INFO: Email sent successfully.")
     except Exception as e:
         print(f"CRITICAL: Failed to send email: {e}")
-' "$LOG_FILE" "$GLOBAL_FILE" "$SCRIPT_NAME"
+' "$LOG_FILE" "$CONFIG_JSON" "$SCRIPT_NAME"
         
     else
         write_log "Log file not found at $LOG_FILE. Cannot scan for errors." "WARNING"
@@ -109,22 +106,12 @@ if errors:
 
 write_log "Initializing script execution." "INFO"
 
-# Load Config
-if [ ! -f "$CONFIG_FILE" ]; then
-    write_log "FATAL: Config file missing at $CONFIG_FILE." "CRITICAL"
+# Load Config using the Hiera helper
+CONFIG_JSON=$(python3 "$BASE_DIR/Functions/get_script_config.py" "$SCRIPT_NAME")
+if [ $? -ne 0 ] || [ -z "$CONFIG_JSON" ]; then
+    write_log "FATAL: Failed to resolve configuration via get_script_config.py." "CRITICAL"
     exit 1
 fi
-
-CONFIG_JSON=$(python3 -c '
-import json
-import sys
-try:
-    with open(sys.argv[1], "r") as f:
-        config = json.load(f)
-    print(json.dumps(config))
-except Exception as e:
-    print("{}")
-' "$CONFIG_FILE")
 
 ENABLE_RDP=$(python3 -c "import json, sys; print(json.loads(sys.argv[1]).get('EnableRDP', False))" "$CONFIG_JSON")
 

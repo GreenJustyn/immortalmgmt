@@ -1,4 +1,6 @@
-$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$',''
+# 1. Native Write-Log Function with Severity Levels
+
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$'',''
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 
@@ -8,7 +10,6 @@ $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
 $CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
 $Environment = "#{ENVIRONMENT}#"
 
-# 1. Native Write-Log Function with Severity Levels
 Function Write-Log {
     Param(
         [Parameter(Mandatory=$true, Position=0)][string]$Message,
@@ -19,10 +20,8 @@ Function Write-Log {
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     
     if ($Start) { "( --- START [$Timestamp] $ScriptName --- )" | Out-File -FilePath $LogFile -Append }
-    
     "[$Timestamp] [$Level] [$Environment] $Message" | Out-File -FilePath $LogFile -Append
     
-    # Optional console output for manual runs
     if ($Level -eq "ERROR" -or $Level -eq "CRITICAL") { Write-Host "[$Level] $Message" -ForegroundColor Red }
     elseif ($Level -eq "WARNING") { Write-Host "[$Level] $Message" -ForegroundColor Yellow }
     else { Write-Host "[$Level] $Message" -ForegroundColor Gray }
@@ -30,78 +29,77 @@ Function Write-Log {
     if ($End) { "( --- END [$Timestamp] $ScriptName --- )`r`n" | Out-File -FilePath $LogFile -Append }
 }
 
-# 2. Main Execution Block wrapped in Try/Catch
-try {
-    Write-Log "Initializing script execution." -Start
+Write-Log "Initializing script execution." -Start
 
-    # Config Check
-    if (-not (Test-Path $ConfigFile)) { 
-        throw "FATAL: Config missing at $ConfigFile." 
-    }
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
-    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $ConfigHash = @{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    $Config = [PSCustomObject]$ConfigHash
-    Write-Log "Loaded Configuration Variables:" "INFO"
-    foreach ($prop in $Config.psobject.Properties) {
-        if ($prop.Name -match "Password|Token") {
-            Write-Log "  $($prop.Name) = ********" "INFO"
-        } else {
-            Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
-        }
-    }
+# Load configuration using the Hiera helper
+$Config = . (Join-Path $BaseDir "Functions\Get-ScriptConfig.ps1") -ScriptName $ScriptName
 
-    # Credential Check
-    if (-not (Test-Path $CredFile)) { 
-        throw "FATAL: Credential XML missing at $CredFile." 
-    }
-    try { 
-        $SvcCreds = Import-Clixml -Path $CredFile 
-        # Extract SecureString password (New-LocalUser natively accepts this)
-        if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
-            $SecurePassword = $SvcCreds.Password
-        } else {
-            $SecurePassword = $SvcCreds # Assume it is the SecureString itself
-        }
-    } catch { 
-        throw "ERROR: Credential import failed. Ensure the script is run by the user who created the XML." 
-    }
-
-    # Idempotent Logic
-    $UserExists = Get-LocalUser -Name $Config.AccountName -ErrorAction SilentlyContinue
-
-    if (-not $UserExists) {
-        Write-Log "Local account '$($Config.AccountName)' does not exist. Creating..." "INFO"
-        New-LocalUser -Name $Config.AccountName -Password $SecurePassword -Description $Config.AccountDescription -PasswordNeverExpires -ErrorAction Stop | Out-Null
-        
-        Write-Log "Adding '$($Config.AccountName)' to '$($Config.GroupName)' group." "INFO"
-        Add-LocalGroupMember -Group $Config.GroupName -Member $Config.AccountName -ErrorAction Stop
-        
-        Write-Log "Local Administrator account created and permissioned successfully." "INFO"
+Write-Log "Loaded Configuration Variables:" "INFO"
+foreach ($prop in $Config.psobject.Properties) {
+    if ($prop.Name -match "Password|Token") {
+        Write-Log "  $($prop.Name) = ********" "INFO"
     } else {
-        Write-Log "Local account '$($Config.AccountName)' already exists. Ensuring password and group membership are enforced." "INFO"
-        Set-LocalUser -Name $Config.AccountName -Password $SecurePassword -ErrorAction Stop
-        
-        $GroupMembers = Get-LocalGroupMember -Group $Config.GroupName | Select-Object -ExpandProperty Name
-        $FullAccountString = "$env:COMPUTERNAME\$($Config.AccountName)"
-        
-        if ($GroupMembers -notcontains $FullAccountString -and $GroupMembers -notcontains $Config.AccountName) {
-            Write-Log "Account is missing from '$($Config.GroupName)'. Re-adding..." "WARNING"
-            # Upgraded to Stop so failures are caught and emailed
-            Add-LocalGroupMember -Group $Config.GroupName -Member $Config.AccountName -ErrorAction Stop
-        }
-        Write-Log "Account exists. State enforcement complete." "INFO"
+        Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
     }
+}
 
+$scriptExitCode = 0
+
+try {
+    $scriptExitCode = 0
+
+    try {
+        # Credential Check
+            if (-not (Test-Path $CredFile)) { 
+                throw "FATAL: Credential XML missing at $CredFile." 
+            }
+            try { 
+                $SvcCreds = Import-Clixml -Path $CredFile 
+                # Extract SecureString password (New-LocalUser natively accepts this)
+                if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
+                    $SecurePassword = $SvcCreds.Password
+                } else {
+                    $SecurePassword = $SvcCreds # Assume it is the SecureString itself
+                }
+            } catch { 
+                throw "ERROR: Credential import failed. Ensure the script is run by the user who created the XML." 
+            }
+
+            # Idempotent Logic
+            $UserExists = Get-LocalUser -Name $Config.AccountName -ErrorAction SilentlyContinue
+
+            if (-not $UserExists) {
+                Write-Log "Local account '$($Config.AccountName)' does not exist. Creating..." "INFO"
+                New-LocalUser -Name $Config.AccountName -Password $SecurePassword -Description $Config.AccountDescription -PasswordNeverExpires -ErrorAction Stop | Out-Null
+
+                Write-Log "Adding '$($Config.AccountName)' to '$($Config.GroupName)' group." "INFO"
+                Add-LocalGroupMember -Group $Config.GroupName -Member $Config.AccountName -ErrorAction Stop
+
+                Write-Log "Local Administrator account created and permissioned successfully." "INFO"
+            } else {
+                Write-Log "Local account '$($Config.AccountName)' already exists. Ensuring password and group membership are enforced." "INFO"
+                Set-LocalUser -Name $Config.AccountName -Password $SecurePassword -ErrorAction Stop
+
+                $GroupMembers = Get-LocalGroupMember -Group $Config.GroupName | Select-Object -ExpandProperty Name
+                $FullAccountString = "$env:COMPUTERNAME\$($Config.AccountName)"
+
+                if ($GroupMembers -notcontains $FullAccountString -and $GroupMembers -notcontains $Config.AccountName) {
+                    Write-Log "Account is missing from '$($Config.GroupName)'. Re-adding..." "WARNING"
+                    # Upgraded to Stop so failures are caught and emailed
+                    Add-LocalGroupMember -Group $Config.GroupName -Member $Config.AccountName -ErrorAction Stop
+                }
+                Write-Log "Account exists. State enforcement complete." "INFO"
+            }
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    } finally {
 } catch {
-    # Catch any terminating errors and log them
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
-
+    $scriptExitCode = 1
 } finally {
     # =====================================================================
-    # 3. Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
+    # Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
     # =====================================================================
     if (Test-Path $LogFile) {
         Write-Log "Scanning $LogFile for errors in the last 5 minutes..." "INFO"
@@ -111,7 +109,6 @@ try {
         $logContents = Get-Content -Path $LogFile
         
         foreach ($line in $logContents) {
-            # Parse [Date] [Level] [Environment] Message
             if ($line -match "^\[(.*?)\] \[(.*?)\] \[(.*?)\] (.*)") {
                 $logDateStr = $matches[1]
                 $logLevel   = $matches[2]
@@ -128,13 +125,23 @@ try {
             Write-Log "$($errorLines.Count) error(s) found. Attempting to send email alert..." "INFO"
             
             try {
-                # Ensure these are populated in your JSON config
                 $appPassword = $Config.EmailAppPassword 
                 $emailFrom   = $Config.EmailFrom
                 $emailTo     = $Config.EmailTo
 
                 if (-not $appPassword -or -not $emailFrom -or -not $emailTo) {
                     throw "Email configuration missing from JSON config."
+                }
+
+                if (-not (Get-Module -ListAvailable -Name PoshMailKit)) {
+                    Write-Log "PoshMailKit module is not installed. Attempting installation..." "WARNING"
+                    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
+                } else {
+                    Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
+                    Update-Module -Name PoshMailKit -Force -Scope CurrentUser -ErrorAction SilentlyContinue
                 }
 
                 $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
@@ -164,4 +171,8 @@ try {
     }
 
     Write-Log "Script execution completed." -End
+}
+
+if ($scriptExitCode -ne 0) {
+    exit $scriptExitCode
 }

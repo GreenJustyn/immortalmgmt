@@ -347,6 +347,17 @@ try {
             $emailBody = "The following errors were detected in the media script run:`n`n" + ($errorLines -join "`n")
             
             try {
+                if (-not (Get-Module -ListAvailable -Name PoshMailKit)) {
+                    Write-Log "PoshMailKit module is not installed. Attempting installation..." "WARNING"
+                    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
+                } else {
+                    Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
+                    Update-Module -Name PoshMailKit -Force -Scope CurrentUser -ErrorAction SilentlyContinue
+                }
+
                 Import-Module PoshMailKit -ErrorAction Stop
                 Send-MKMailMessage -To $emailTo `
                                    -From $emailFrom `

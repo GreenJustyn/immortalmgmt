@@ -1,4 +1,6 @@
-$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$',''
+# 1. Native Write-Log Function with Severity Levels
+
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$'',''
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 
@@ -8,7 +10,6 @@ $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
 $CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
 $Environment = "#{ENVIRONMENT}#"
 
-# 1. Native Write-Log Function with Severity Levels
 Function Write-Log {
     Param(
         [Parameter(Mandatory=$true, Position=0)][string]$Message,
@@ -19,10 +20,8 @@ Function Write-Log {
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     
     if ($Start) { "( --- START [$Timestamp] $ScriptName --- )" | Out-File -FilePath $LogFile -Append }
-    
     "[$Timestamp] [$Level] [$Environment] $Message" | Out-File -FilePath $LogFile -Append
     
-    # Optional console output for manual runs
     if ($Level -eq "ERROR" -or $Level -eq "CRITICAL") { Write-Host "[$Level] $Message" -ForegroundColor Red }
     elseif ($Level -eq "WARNING") { Write-Host "[$Level] $Message" -ForegroundColor Yellow }
     else { Write-Host "[$Level] $Message" -ForegroundColor Gray }
@@ -30,107 +29,73 @@ Function Write-Log {
     if ($End) { "( --- END [$Timestamp] $ScriptName --- )`r`n" | Out-File -FilePath $LogFile -Append }
 }
 
-# 2. Main Execution Block wrapped in Try/Catch
-try {
-    Write-Log "Initializing script execution." -Start
+Write-Log "Initializing script execution." -Start
 
-    # Config Check
-    if (-not (Test-Path $ConfigFile)) { 
-        throw "FATAL: Config missing at $ConfigFile." 
-    }
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
-    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $ConfigHash = @{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    $Config = [PSCustomObject]$ConfigHash
-    Write-Log "Loaded Configuration Variables:" "INFO"
-    foreach ($prop in $Config.psobject.Properties) {
-        if ($prop.Name -match "Password|Token") {
-            Write-Log "  $($prop.Name) = ********" "INFO"
-        } else {
-            Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
-        }
-    }
-    
-    # Credential Check
-    if (-not (Test-Path $CredFile)) { 
-        throw "FATAL: Credential XML missing at $CredFile." 
-    }
-    try { 
-        $SvcCreds = Import-Clixml -Path $CredFile 
-    } catch { 
-        throw "ERROR: Credential import failed. Ensure script is run by the user who created the XML." 
-    }
+# Load configuration using the Hiera helper
+$Config = . (Join-Path $BaseDir "Functions\Get-ScriptConfig.ps1") -ScriptName $ScriptName
 
-    if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
-        Write-Log "PSWindowsUpdate module not found. Attempting to install from PSGallery..." "INFO"
-        try {
-            Install-Module -Name PSWindowsUpdate -Force -Scope AllUsers -ErrorAction Stop
-            Write-Log "PSWindowsUpdate installed successfully." "INFO"
-        } catch {
-            throw "FATAL: Failed to install PSWindowsUpdate. Please run script 14 or install it manually. Error: $($_.Exception.Message)"
-        }
-    }
-
-    Import-Module PSWindowsUpdate -ErrorAction Stop
-
-    # Idempotent Logic
-    Write-Log "Checking for available Windows micro-updates..." "INFO"
-    $AvailableUpdates = Get-WindowsUpdate -MicrosoftUpdate -ErrorAction SilentlyContinue
-
-    if ($AvailableUpdates) {
-        Write-Log "Found $($AvailableUpdates.Count) available update(s). Initiating installation." "INFO"
-        
-        # Suppress automatic reboot to send the alert first
-        $InstallResult = Install-WindowsUpdate -MicrosoftUpdate -AcceptAll:$Config.AcceptAll -IgnoreReboot -ErrorAction Stop
-        
-        $RequiresReboot = $false
-        foreach ($Result in $InstallResult) {
-            Write-Log "Installed: $($Result.Title) - Status: $($Result.Result)" "INFO"
-            if ($Result.RebootRequired) { $RequiresReboot = $true }
-        }
-
-        # =====================================================================
-        # Specific Event Alert: Reboot Required Visibility
-        # =====================================================================
-        if ($RequiresReboot) {
-            Write-Log "Updates require a reboot. Triggering alert via MKMailMessage." "INFO"
-            
-            try {
-                $appPassword = $Config.EmailAppPassword 
-                $emailFrom   = $Config.EmailFrom
-                $emailTo     = $Config.EmailTo
-                $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
-                $credential  = New-Object System.Management.Automation.PSCredential ($emailFrom, $secPassword)
-
-                Import-Module PoshMailKit -ErrorAction Stop
-                Send-MKMailMessage -To $emailTo `
-                                   -From $emailFrom `
-                                   -Subject "[$Environment] REBOOT REQUIRED: Windows Updates Installed" `
-                                   -Body "The server has installed micro-updates and is pending a reboot to finalize." `
-                                   -SmtpServer "smtp.gmail.com" `
-                                   -Port 587 `
-                                   -UseSsl `
-                                   -Credential $credential
-                
-                Write-Log "Reboot alert email sent successfully." "INFO"
-            } catch {
-                # Downgraded to WARNING so it doesn't trigger a secondary failure email
-                Write-Log "Failed to send MKMailMessage reboot alert. $($_.Exception.Message)" "WARNING"
-            }
-        }
+Write-Log "Loaded Configuration Variables:" "INFO"
+foreach ($prop in $Config.psobject.Properties) {
+    if ($prop.Name -match "Password|Token") {
+        Write-Log "  $($prop.Name) = ********" "INFO"
     } else {
-        Write-Log "The system is evergreen. No new updates available." "INFO"
+        Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
     }
+}
 
+$scriptExitCode = 0
+
+try {
+    $scriptExitCode = 0
+
+    try {
+        # Credential Check
+            if (-not (Test-Path $CredFile)) { 
+                throw "FATAL: Credential XML missing at $CredFile." 
+            }
+            try { 
+                $SvcCreds = Import-Clixml -Path $CredFile 
+            } catch { 
+                throw "ERROR: Credential import failed. Ensure script is run by the user who created the XML." 
+            }
+
+            if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
+                Write-Log "PSWindowsUpdate module not found. Attempting to install from PSGallery..." "INFO"
+                try {
+                    Install-Module -Name PSWindowsUpdate -Force -Scope AllUsers -ErrorAction Stop
+                    Write-Log "PSWindowsUpdate installed successfully." "INFO"
+                } catch {
+                    throw "FATAL: Failed to install PSWindowsUpdate. Please run script 14 or install it manually. Error: $($_.Exception.Message)"
+                }
+            }
+
+            Import-Module PSWindowsUpdate -ErrorAction Stop
+
+            # Idempotent Logic
+            Write-Log "Checking for available Windows micro-updates..." "INFO"
+            $AvailableUpdates = Get-WindowsUpdate -MicrosoftUpdate -ErrorAction SilentlyContinue
+
+            if ($AvailableUpdates) {
+                Write-Log "Found $($AvailableUpdates.Count) available update(s). Initiating installation." "INFO"
+
+                # Suppress automatic reboot to send the alert first
+                $InstallResult = Install-WindowsUpdate -MicrosoftUpdate -AcceptAll:$Config.AcceptAll -IgnoreReboot -ErrorAction Stop
+
+                $RequiresReboot = $false
+                foreach ($Result in $InstallResult) {
+                    Write-Log "Installed: $($Result.Title) - Status: $($Result.Result)" "INFO"
+                    if ($Result.RebootRequired) { $RequiresReboot = $true }
+                }
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    } finally {
 } catch {
-    # Catch any terminating errors and log them
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
-
+    $scriptExitCode = 1
 } finally {
     # =====================================================================
-    # Post-Flight: Log Scanning & Error Alerting (PoshMailKit)
+    # Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
     # =====================================================================
     if (Test-Path $LogFile) {
         Write-Log "Scanning $LogFile for errors in the last 5 minutes..." "INFO"
@@ -140,7 +105,6 @@ try {
         $logContents = Get-Content -Path $LogFile
         
         foreach ($line in $logContents) {
-            # Parse [Date] [Level] [Environment] Message
             if ($line -match "^\[(.*?)\] \[(.*?)\] \[(.*?)\] (.*)") {
                 $logDateStr = $matches[1]
                 $logLevel   = $matches[2]
@@ -163,6 +127,17 @@ try {
 
                 if (-not $appPassword -or -not $emailFrom -or -not $emailTo) {
                     throw "Email configuration missing from JSON config."
+                }
+
+                if (-not (Get-Module -ListAvailable -Name PoshMailKit)) {
+                    Write-Log "PoshMailKit module is not installed. Attempting installation..." "WARNING"
+                    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
+                } else {
+                    Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
+                    Update-Module -Name PoshMailKit -Force -Scope CurrentUser -ErrorAction SilentlyContinue
                 }
 
                 $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
@@ -192,4 +167,8 @@ try {
     }
 
     Write-Log "Script execution completed." -End
+}
+
+if ($scriptExitCode -ne 0) {
+    exit $scriptExitCode
 }

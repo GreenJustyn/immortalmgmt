@@ -20,8 +20,15 @@ class ScriptConfig:
 
     def __init__(self, config_path: str):
         self.config_path = Path(config_path)
-        # Modified for immortalmgmt structure: Scripts are in Scripts/Windows
-        self.scripts_dir = Path(__file__).parent / "Scripts" / "Windows"
+        # Platform detection for script locations and extensions
+        if sys.platform == "win32":
+            self.scripts_dir = Path(__file__).parent / "Scripts" / "Windows"
+            self.script_ext = "*.ps1"
+            self.ext_suffix = ".ps1"
+        else:
+            self.scripts_dir = Path(__file__).parent / "Scripts" / "Linux"
+            self.script_ext = "*.sh"
+            self.ext_suffix = ".sh"
         self.dump_dir = Path(__file__).parent / "Scripts" / "script_dump"
         self.config = self._load_config()
 
@@ -99,23 +106,23 @@ class ScriptConfig:
             json.dump(self.config, f, indent=2)
 
     def get_all_scripts(self) -> List[str]:
-        """Get all available PowerShell scripts"""
+        """Get all available scripts"""
         scripts = []
         if self.scripts_dir.exists():
-            scripts.extend([f.stem for f in self.scripts_dir.glob("*.ps1")])
+            scripts.extend([f.stem for f in self.scripts_dir.glob(self.script_ext)])
         if self.dump_dir.exists():
-            scripts.extend([f.stem for f in self.dump_dir.glob("*.ps1")])
+            scripts.extend([f.stem for f in self.dump_dir.glob(self.script_ext)])
         return sorted(set(scripts))
 
     def get_script_path(self, script_name: str) -> Optional[Path]:
         """Get the full path to a script"""
         # Check main scripts directory first
-        main_path = self.scripts_dir / f"{script_name}.ps1"
+        main_path = self.scripts_dir / f"{script_name}{self.ext_suffix}"
         if main_path.exists():
             return main_path
 
         # Check dump directory
-        dump_path = self.dump_dir / f"{script_name}.ps1"
+        dump_path = self.dump_dir / f"{script_name}{self.ext_suffix}"
         if dump_path.exists():
             return dump_path
 
@@ -769,7 +776,7 @@ class PowerShellCommander(ctk.CTk):
         self._update_status(f"Loaded {len(scripts)} scripts in {category}")
 
     def _run_script(self, script_info: dict):
-        """Run a PowerShell script"""
+        """Run a PowerShell or Bash script"""
         script_name = script_info["name"]
         script_path = self.config.get_script_path(script_name)
 
@@ -785,18 +792,24 @@ class PowerShellCommander(ctk.CTk):
             if dialog.cancelled:
                 return
 
-            args = " ".join([f'-{k} "{v}"' for k, v in dialog.results.items() if v])
+            if self.config.ext_suffix == ".ps1":
+                args = " ".join([f'-{k} "{v}"' for k, v in dialog.results.items() if v])
+            else:
+                args = " ".join([f'"{v}"' for k, v in dialog.results.items() if v])
         else:
             args = ""
 
         # Build command
-        if sys.platform == "win32":
-            cmd = f'powershell.exe -ExecutionPolicy Bypass -File "{script_path}" {args}'
+        if script_path.suffix == ".sh":
+            cmd = f'bash "{script_path}" {args}'
+            self.console.append_command(f"{script_name}.sh {args}")
         else:
-            # For Linux/WSL
-            cmd = f'pwsh -File "{script_path}" {args}'
+            if sys.platform == "win32":
+                cmd = f'powershell.exe -ExecutionPolicy Bypass -File "{script_path}" {args}'
+            else:
+                cmd = f'pwsh -File "{script_path}" {args}'
+            self.console.append_command(f"{script_name}.ps1 {args}")
 
-        self.console.append_command(f"{script_name}.ps1 {args}")
         self._update_status(f"Running: {script_name}...")
 
         # Run in thread to prevent UI freeze

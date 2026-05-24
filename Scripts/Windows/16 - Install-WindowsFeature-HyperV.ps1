@@ -1,4 +1,10 @@
-$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$',''
+# Script that ends immediately
+Write-Host "This Script is DEACTIVATED."
+exit # The script stops here.
+
+# 1. Native Write-Log Function with Severity Levels
+
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$'',''
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 
@@ -8,11 +14,6 @@ $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
 $CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
 $Environment = "#{ENVIRONMENT}#"
 
-# Script that ends immediately
-Write-Host "This Script is DEACTIVATED."
-exit # The script stops here.
-
-# 1. Native Write-Log Function with Severity Levels
 Function Write-Log {
     Param(
         [Parameter(Mandatory=$true, Position=0)][string]$Message,
@@ -23,10 +24,8 @@ Function Write-Log {
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     
     if ($Start) { "( --- START [$Timestamp] $ScriptName --- )" | Out-File -FilePath $LogFile -Append }
-    
     "[$Timestamp] [$Level] [$Environment] $Message" | Out-File -FilePath $LogFile -Append
     
-    # Optional console output for manual runs
     if ($Level -eq "ERROR" -or $Level -eq "CRITICAL") { Write-Host "[$Level] $Message" -ForegroundColor Red }
     elseif ($Level -eq "WARNING") { Write-Host "[$Level] $Message" -ForegroundColor Yellow }
     else { Write-Host "[$Level] $Message" -ForegroundColor Gray }
@@ -34,98 +33,59 @@ Function Write-Log {
     if ($End) { "( --- END [$Timestamp] $ScriptName --- )`r`n" | Out-File -FilePath $LogFile -Append }
 }
 
-# 2. Main Execution Block wrapped in Try/Catch
-try {
-    Write-Log "Initializing script execution." -Start
+Write-Log "Initializing script execution." -Start
 
-    # Config Check
-    if (-not (Test-Path $ConfigFile)) { 
-        throw "FATAL: Config missing at $ConfigFile." 
-    }
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
-    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $ConfigHash = @{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    $Config = [PSCustomObject]$ConfigHash
-    Write-Log "Loaded Configuration Variables:" "INFO"
-    foreach ($prop in $Config.psobject.Properties) {
-        if ($prop.Name -match "Password|Token") {
-            Write-Log "  $($prop.Name) = ********" "INFO"
-        } else {
-            Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
-        }
-    }
+# Load configuration using the Hiera helper
+$Config = . (Join-Path $BaseDir "Functions\Get-ScriptConfig.ps1") -ScriptName $ScriptName
 
-    # Credential Check (included if your downstream logic requires it)
-    if (-not (Test-Path $CredFile)) { 
-        throw "FATAL: Credential XML missing at $CredFile." 
-    }
-    try { 
-        $SvcCreds = Import-Clixml -Path $CredFile 
-    } catch { 
-        throw "ERROR: Credential import failed. Ensure script is run by the user who created the XML." 
-    }
-
-    # Idempotent Logic
-    $Feature = Get-WindowsFeature -Name $Config.FeatureName -ErrorAction SilentlyContinue
-    $RequiresReboot = $false
-
-    if ($Feature -and -not $Feature.Installed) {
-        Write-Log "Feature $($Config.FeatureName) is not installed. Installing now." "INFO"
-        
-        # ErrorAction Stop ensures if the installation fails, it drops to the catch block and alerts you
-        $InstallResult = Install-WindowsFeature -Name $Config.FeatureName -IncludeManagementTools:$Config.IncludeManagementTools -ErrorAction Stop
-        
-        if ($InstallResult.RestartNeeded) {
-            $RequiresReboot = $true
-        }
-        Write-Log "Feature $($Config.FeatureName) installation executed." "INFO"
+Write-Log "Loaded Configuration Variables:" "INFO"
+foreach ($prop in $Config.psobject.Properties) {
+    if ($prop.Name -match "Password|Token") {
+        Write-Log "  $($prop.Name) = ********" "INFO"
     } else {
-        Write-Log "Feature $($Config.FeatureName) is already installed. No action taken." "INFO"
+        Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
     }
+}
 
-    # =====================================================================
-    # Specific Event Alert: Reboot Required Visibility
-    # =====================================================================
-    if ($RequiresReboot) {
-        Write-Log "Reboot required for $($Config.FeatureName) installation. Triggering alert via PoshMailKit." "INFO"
-        try {
-            $appPassword = $Config.EmailAppPassword 
-            $emailFrom   = $Config.EmailFrom
-            $emailTo     = $Config.EmailTo
-            
-            if (-not $appPassword -or -not $emailFrom -or -not $emailTo) {
-                throw "Email configuration missing from JSON config."
+$scriptExitCode = 0
+
+try {
+    $scriptExitCode = 0
+
+    try {
+        # Credential Check (included if your downstream logic requires it)
+            if (-not (Test-Path $CredFile)) { 
+                throw "FATAL: Credential XML missing at $CredFile." 
+            }
+            try { 
+                $SvcCreds = Import-Clixml -Path $CredFile 
+            } catch { 
+                throw "ERROR: Credential import failed. Ensure script is run by the user who created the XML." 
             }
 
-            $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
-            $credential  = New-Object System.Management.Automation.PSCredential ($emailFrom, $secPassword)
+            # Idempotent Logic
+            $Feature = Get-WindowsFeature -Name $Config.FeatureName -ErrorAction SilentlyContinue
+            $RequiresReboot = $false
 
-            Import-Module PoshMailKit -ErrorAction Stop
-            Send-MKMailMessage -To $emailTo `
-                               -From $emailFrom `
-                               -Subject "[$Environment] REBOOT REQUIRED: $($Config.FeatureName) Installed" `
-                               -Body "Script $ScriptName installed $($Config.FeatureName) and requires a system reboot." `
-                               -SmtpServer "smtp.gmail.com" `
-                               -Port 587 `
-                               -UseSsl `
-                               -Credential $credential
-            
-            Write-Log "Reboot alert email sent successfully." "INFO"
-        } catch {
-            # Downgraded to WARNING so it doesn't trigger a secondary failure email
-            Write-Log "Failed to send PoshMailKit reboot alert. $($_.Exception.Message)" "WARNING"
-        }
-    }
+            if ($Feature -and -not $Feature.Installed) {
+                Write-Log "Feature $($Config.FeatureName) is not installed. Installing now." "INFO"
 
+                # ErrorAction Stop ensures if the installation fails, it drops to the catch block and alerts you
+                $InstallResult = Install-WindowsFeature -Name $Config.FeatureName -IncludeManagementTools:$Config.IncludeManagementTools -ErrorAction Stop
+
+                if ($InstallResult.RestartNeeded) {
+                    $RequiresReboot = $true
+                }
+                Write-Log "Feature $($Config.FeatureName) installation executed." "INFO"
+            } else {
+                Write-Log "Feature $($Config.FeatureName) is already installed. No action taken." "INFO"
+            }
 } catch {
-    # Catch any terminating errors and log them
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
-
+    $scriptExitCode = 1
 } finally {
     # =====================================================================
-    # 3. Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
+    # Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
     # =====================================================================
     if (Test-Path $LogFile) {
         Write-Log "Scanning $LogFile for errors in the last 5 minutes..." "INFO"
@@ -135,7 +95,6 @@ try {
         $logContents = Get-Content -Path $LogFile
         
         foreach ($line in $logContents) {
-            # Parse [Date] [Level] [Environment] Message
             if ($line -match "^\[(.*?)\] \[(.*?)\] \[(.*?)\] (.*)") {
                 $logDateStr = $matches[1]
                 $logLevel   = $matches[2]
@@ -152,13 +111,23 @@ try {
             Write-Log "$($errorLines.Count) error(s) found. Attempting to send email alert..." "INFO"
             
             try {
-                # Ensure these are populated in your JSON config
                 $appPassword = $Config.EmailAppPassword 
                 $emailFrom   = $Config.EmailFrom
                 $emailTo     = $Config.EmailTo
 
                 if (-not $appPassword -or -not $emailFrom -or -not $emailTo) {
                     throw "Email configuration missing from JSON config."
+                }
+
+                if (-not (Get-Module -ListAvailable -Name PoshMailKit)) {
+                    Write-Log "PoshMailKit module is not installed. Attempting installation..." "WARNING"
+                    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
+                } else {
+                    Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
+                    Update-Module -Name PoshMailKit -Force -Scope CurrentUser -ErrorAction SilentlyContinue
                 }
 
                 $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
@@ -188,4 +157,8 @@ try {
     }
 
     Write-Log "Script execution completed." -End
+}
+
+if ($scriptExitCode -ne 0) {
+    exit $scriptExitCode
 }

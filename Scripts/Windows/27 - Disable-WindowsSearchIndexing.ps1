@@ -1,4 +1,6 @@
-$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$',''
+# 1. Native Write-Log Function with Severity Levels
+
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$'',''
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 
@@ -8,7 +10,6 @@ $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
 $CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
 $Environment = "#{ENVIRONMENT}#"
 
-# 1. Native Write-Log Function with Severity Levels
 Function Write-Log {
     Param(
         [Parameter(Mandatory=$true, Position=0)][string]$Message,
@@ -19,10 +20,8 @@ Function Write-Log {
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     
     if ($Start) { "( --- START [$Timestamp] $ScriptName --- )" | Out-File -FilePath $LogFile -Append }
-    
     "[$Timestamp] [$Level] [$Environment] $Message" | Out-File -FilePath $LogFile -Append
     
-    # Optional console output for manual runs
     if ($Level -eq "ERROR" -or $Level -eq "CRITICAL") { Write-Host "[$Level] $Message" -ForegroundColor Red }
     elseif ($Level -eq "WARNING") { Write-Host "[$Level] $Message" -ForegroundColor Yellow }
     else { Write-Host "[$Level] $Message" -ForegroundColor Gray }
@@ -30,57 +29,58 @@ Function Write-Log {
     if ($End) { "( --- END [$Timestamp] $ScriptName --- )`r`n" | Out-File -FilePath $LogFile -Append }
 }
 
-# 2. Main Execution Block wrapped in Try/Catch
-try {
-    Write-Log "Initializing script execution." -Start
+Write-Log "Initializing script execution." -Start
 
-    # Config Check
-    if (-not (Test-Path $ConfigFile)) { 
-        throw "FATAL: Config missing at $ConfigFile." 
-    }
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
-    $LocalConfig = Get-Content -Path $ConfigFile | ConvertFrom-Json
-    $ConfigHash = @{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    $Config = [PSCustomObject]$ConfigHash
-    Write-Log "Loaded Configuration Variables:" "INFO"
-    foreach ($prop in $Config.psobject.Properties) {
-        if ($prop.Name -match "Password|Token") {
-            Write-Log "  $($prop.Name) = ********" "INFO"
-        } else {
-            Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
-        }
-    }
+# Load configuration using the Hiera helper
+$Config = . (Join-Path $BaseDir "Functions\Get-ScriptConfig.ps1") -ScriptName $ScriptName
 
-    # Idempotent Logic
-    $Service = Get-Service -Name $Config.ServiceName -ErrorAction SilentlyContinue
-
-    if ($Service) {
-        if ($Service.Status -eq 'Running' -or $Service.StartType -ne 'Disabled') {
-            Write-Log "Windows Search service is active. Stopping and disabling to save IOPS." "INFO"
-            
-            Stop-Service -Name $Config.ServiceName -Force -ErrorAction SilentlyContinue
-            
-            # Requires Administrator privileges; set to Stop so failures are caught and emailed
-            Set-Service -Name $Config.ServiceName -StartupType Disabled -ErrorAction Stop
-            
-            Write-Log "Windows Search successfully disabled." "INFO"
-        } else {
-            Write-Log "Windows Search is already disabled. No action taken." "INFO"
-        }
+Write-Log "Loaded Configuration Variables:" "INFO"
+foreach ($prop in $Config.psobject.Properties) {
+    if ($prop.Name -match "Password|Token") {
+        Write-Log "  $($prop.Name) = ********" "INFO"
     } else {
-        # Left as a warning so it doesn't trigger a failure email if the service is completely removed
-        Write-Log "Windows Search service not found. Skipping." "WARNING"
+        Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
     }
+}
 
+$scriptExitCode = 0
+
+try {
+    $scriptExitCode = 0
+
+    try {
+        # Idempotent Logic
+            $Service = Get-Service -Name $Config.ServiceName -ErrorAction SilentlyContinue
+
+            if ($Service) {
+                if ($Service.Status -eq 'Running' -or $Service.StartType -ne 'Disabled') {
+                    Write-Log "Windows Search service is active. Stopping and disabling to save IOPS." "INFO"
+
+                    Stop-Service -Name $Config.ServiceName -Force -ErrorAction SilentlyContinue
+
+                    # Requires Administrator privileges; set to Stop so failures are caught and emailed
+                    Set-Service -Name $Config.ServiceName -StartupType Disabled -ErrorAction Stop
+
+                    Write-Log "Windows Search successfully disabled." "INFO"
+                } else {
+                    Write-Log "Windows Search is already disabled. No action taken." "INFO"
+                }
+            } else {
+                # Left as a warning so it doesn't trigger a failure email if the service is completely removed
+                Write-Log "Windows Search service not found. Skipping." "WARNING"
+            }
+
+        } catch {
+            # Catch any terminating errors and log them
+            Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+
+        } finally {
 } catch {
-    # Catch any terminating errors and log them
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
-
+    $scriptExitCode = 1
 } finally {
     # =====================================================================
-    # 3. Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
+    # Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
     # =====================================================================
     if (Test-Path $LogFile) {
         Write-Log "Scanning $LogFile for errors in the last 5 minutes..." "INFO"
@@ -90,7 +90,6 @@ try {
         $logContents = Get-Content -Path $LogFile
         
         foreach ($line in $logContents) {
-            # Parse [Date] [Level] [Environment] Message
             if ($line -match "^\[(.*?)\] \[(.*?)\] \[(.*?)\] (.*)") {
                 $logDateStr = $matches[1]
                 $logLevel   = $matches[2]
@@ -107,13 +106,23 @@ try {
             Write-Log "$($errorLines.Count) error(s) found. Attempting to send email alert..." "INFO"
             
             try {
-                # Ensure these are populated in your JSON config
                 $appPassword = $Config.EmailAppPassword 
                 $emailFrom   = $Config.EmailFrom
                 $emailTo     = $Config.EmailTo
 
                 if (-not $appPassword -or -not $emailFrom -or -not $emailTo) {
                     throw "Email configuration missing from JSON config."
+                }
+
+                if (-not (Get-Module -ListAvailable -Name PoshMailKit)) {
+                    Write-Log "PoshMailKit module is not installed. Attempting installation..." "WARNING"
+                    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
+                } else {
+                    Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
+                    Update-Module -Name PoshMailKit -Force -Scope CurrentUser -ErrorAction SilentlyContinue
                 }
 
                 $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
@@ -143,4 +152,8 @@ try {
     }
 
     Write-Log "Script execution completed." -End
+}
+
+if ($scriptExitCode -ne 0) {
+    exit $scriptExitCode
 }

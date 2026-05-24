@@ -5,14 +5,22 @@
 
 # Requires -RunAsAdministrator
 
-$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.ps1$',''
 if (-not $ScriptName) { $ScriptName = "98_Git_Install" } # Fallback if run unsaved in ISE/VSCode
 
-$LogFile        = "C:\Scripts\Logs\$ScriptName.log"
 $configFilePath = "C:\Scripts\Variables\98 - Git.json"
-$Environment    = "#{ENVIRONMENT}#" # GitOps Placeholder
 
 # 1. Native Write-Log Function with Severity Levels
+
+$ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$'',''
+$ScriptDir   = $PSScriptRoot
+$BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
+
+$LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
+$ConfigFile  = Join-Path (Join-Path $BaseDir "Variables") "$ScriptName.json"
+$GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
+$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
+$Environment = "#{ENVIRONMENT}#"
+
 Function Write-Log {
     Param(
         [Parameter(Mandatory=$true, Position=0)][string]$Message,
@@ -23,10 +31,8 @@ Function Write-Log {
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     
     if ($Start) { "( --- START [$Timestamp] $ScriptName --- )" | Out-File -FilePath $LogFile -Append }
-    
     "[$Timestamp] [$Level] [$Environment] $Message" | Out-File -FilePath $LogFile -Append
     
-    # Optional console output for manual runs
     if ($Level -eq "ERROR" -or $Level -eq "CRITICAL") { Write-Host "[$Level] $Message" -ForegroundColor Red }
     elseif ($Level -eq "WARNING") { Write-Host "[$Level] $Message" -ForegroundColor Yellow }
     else { Write-Host "[$Level] $Message" -ForegroundColor Gray }
@@ -34,93 +40,93 @@ Function Write-Log {
     if ($End) { "( --- END [$Timestamp] $ScriptName --- )`r`n" | Out-File -FilePath $LogFile -Append }
 }
 
-# 2. Main Execution Block wrapped in Try/Catch
+Write-Log "Initializing script execution." -Start
+
+# Load configuration using the Hiera helper
+$Config = . (Join-Path $BaseDir "Functions\Get-ScriptConfig.ps1") -ScriptName $ScriptName
+
+Write-Log "Loaded Configuration Variables:" "INFO"
+foreach ($prop in $Config.psobject.Properties) {
+    if ($prop.Name -match "Password|Token") {
+        Write-Log "  $($prop.Name) = ********" "INFO"
+    } else {
+        Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
+    }
+}
+
+$scriptExitCode = 0
+
 try {
-    Write-Log "Initializing script execution." -Start
+    $scriptExitCode = 0
 
-    # Load Configuration
-    if (-not (Test-Path $configFilePath)) {
-        throw "Configuration file not found at $configFilePath."
-    }
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
-    $LocalConfig = Get-Content -Path $configFilePath -Raw | ConvertFrom-Json
-    $ConfigHash = @{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    $config = [PSCustomObject]$ConfigHash
-    Write-Log "Loaded Configuration Variables:" "INFO"
-    foreach ($prop in $config.psobject.Properties) {
-        if ($prop.Name -match "Password|Token") {
-            Write-Log "  $($prop.Name) = ********" "INFO"
-        } else {
-            Write-Log "  $($prop.Name) = $($prop.Value)" "INFO"
-        }
-    }
-    $InstallDir = $config.InstallDir
-    $DownloadDir = $config.DownloadDir
+    try {
+        $InstallDir = $config.InstallDir
+            $DownloadDir = $config.DownloadDir
 
-    # Fetch Latest Release Info
-    Write-Log "Fetching latest Git release info from GitHub API..." "INFO"
-    $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
-    $release = Invoke-RestMethod -Uri $apiUrl
-    $asset = $release.assets | Where-Object { $_.name -match "^PortableGit-.*-64-bit\.7z\.exe$" } | Select-Object -First 1
-    $installerPath = Join-Path -Path $DownloadDir -ChildPath $asset.name
+            # Fetch Latest Release Info
+            Write-Log "Fetching latest Git release info from GitHub API..." "INFO"
+            $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+            $release = Invoke-RestMethod -Uri $apiUrl
+            $asset = $release.assets | Where-Object { $_.name -match "^PortableGit-.*-64-bit\.7z\.exe$" } | Select-Object -First 1
+            $installerPath = Join-Path -Path $DownloadDir -ChildPath $asset.name
 
-    # Download
-    if (-not (Test-Path $DownloadDir)) { New-Item -Path $DownloadDir -ItemType Directory -Force | Out-Null }
-    
-    if (-not (Test-Path $installerPath)) {
-        Write-Log "[DOWNLOAD] Downloading $($asset.name)..." "INFO"
-        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $installerPath
-    } else {
-        Write-Log "[DOWNLOAD] Installer $($asset.name) already exists locally. Skipping download." "INFO"
-    }
+            # Download
+            if (-not (Test-Path $DownloadDir)) { New-Item -Path $DownloadDir -ItemType Directory -Force | Out-Null }
 
-    # Forced Silent Extraction
-    Write-Log "[UPDATE] Extracting silently to $InstallDir..." "INFO"
+            if (-not (Test-Path $installerPath)) {
+                Write-Log "[DOWNLOAD] Downloading $($asset.name)..." "INFO"
+                Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $installerPath
+            } else {
+                Write-Log "[DOWNLOAD] Installer $($asset.name) already exists locally. Skipping download." "INFO"
+            }
 
-    if (-not (Test-Path $InstallDir)) {
-        New-Item -Path $InstallDir -ItemType Directory -Force | Out-Null
-    }
+            # Forced Silent Extraction
+            Write-Log "[UPDATE] Extracting silently to $InstallDir..." "INFO"
 
-    # We use Resolve-Path to ensure we have a full, absolute Windows path.
-    $fullPath = (Resolve-Path $InstallDir).Path.TrimEnd('\')
-    $argList = "-y", "-o$fullPath"
+            if (-not (Test-Path $InstallDir)) {
+                New-Item -Path $InstallDir -ItemType Directory -Force | Out-Null
+            }
 
-    $process = Start-Process -FilePath $installerPath -ArgumentList $argList -Wait -PassThru -NoNewWindow
+            # We use Resolve-Path to ensure we have a full, absolute Windows path.
+            $fullPath = (Resolve-Path $InstallDir).Path.TrimEnd('\')
+            $argList = "-y", "-o$fullPath"
 
-    if ($process.ExitCode -ne 0) {
-        throw "Extraction failed with exit code $($process.ExitCode)."
-    }
+            $process = Start-Process -FilePath $installerPath -ArgumentList $argList -Wait -PassThru -NoNewWindow
 
-    # Environment & PATH Update
-    $gitCmdPath = Join-Path -Path $InstallDir -ChildPath "cmd"
-    $gitExePath = Join-Path -Path $gitCmdPath -ChildPath "git.exe"
+            if ($process.ExitCode -ne 0) {
+                throw "Extraction failed with exit code $($process.ExitCode)."
+            }
 
-    $machinePath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine)
-    if ($machinePath -notlike "*$gitCmdPath*") {
-        Write-Log "Updating System PATH environment variable..." "INFO"
-        $newPath = "$machinePath;$gitCmdPath"
-        [Environment]::SetEnvironmentVariable('Path', $newPath, [EnvironmentVariableTarget]::Machine)
-        $env:Path = $newPath # Update current session
-    }
+            # Environment & PATH Update
+            $gitCmdPath = Join-Path -Path $InstallDir -ChildPath "cmd"
+            $gitExePath = Join-Path -Path $gitCmdPath -ChildPath "git.exe"
 
-    # Non-Interactive Validation
-    Write-Log "[VERIFY] Checking installation..." "INFO"
-    Start-Sleep -Seconds 2 # Small delay to let the file system catch up
+            $machinePath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine)
+            if ($machinePath -notlike "*$gitCmdPath*") {
+                Write-Log "Updating System PATH environment variable..." "INFO"
+                $newPath = "$machinePath;$gitCmdPath"
+                [Environment]::SetEnvironmentVariable('Path', $newPath, [EnvironmentVariableTarget]::Machine)
+                $env:Path = $newPath # Update current session
+            }
 
-    if (Test-Path $gitExePath) {
-        $version = & $gitExePath --version
-        Write-Log "[SUCCESS] Git found at: $gitExePath" "INFO"
-        Write-Log "[INFO] $version" "INFO"
-    } else {
-        throw "Extraction reported success, but git.exe is missing from $gitExePath. Check if antivirus blocked the extraction."
-    }
+            # Non-Interactive Validation
+            Write-Log "[VERIFY] Checking installation..." "INFO"
+            Start-Sleep -Seconds 2 # Small delay to let the file system catch up
 
+            if (Test-Path $gitExePath) {
+                $version = & $gitExePath --version
+                Write-Log "[SUCCESS] Git found at: $gitExePath" "INFO"
+                Write-Log "[INFO] $version" "INFO"
+            } else {
+                throw "Extraction reported success, but git.exe is missing from $gitExePath. Check if antivirus blocked the extraction."
+            }
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    } finally {
 } catch {
-    # Any "throw" command above will land here as a CRITICAL error
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
-
+    $scriptExitCode = 1
 } finally {
     # =====================================================================
     # Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
@@ -149,24 +155,34 @@ try {
             Write-Log "$($errorLines.Count) error(s) found. Attempting to send email alert..." "INFO"
             
             try {
-                # IMPORTANT: Ensure your 98 - Git.json contains these email fields!
-                $appPassword = $config.EmailAppPassword 
-                $emailFrom   = $config.EmailFrom
-                $emailTo     = $config.EmailTo
+                $appPassword = $Config.EmailAppPassword 
+                $emailFrom   = $Config.EmailFrom
+                $emailTo     = $Config.EmailTo
 
                 if (-not $appPassword -or -not $emailFrom -or -not $emailTo) {
                     throw "Email configuration missing from JSON config."
                 }
 
+                if (-not (Get-Module -ListAvailable -Name PoshMailKit)) {
+                    Write-Log "PoshMailKit module is not installed. Attempting installation..." "WARNING"
+                    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
+                } else {
+                    Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
+                    Update-Module -Name PoshMailKit -Force -Scope CurrentUser -ErrorAction SilentlyContinue
+                }
+
                 $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
                 $credential = New-Object System.Management.Automation.PSCredential ($emailFrom, $secPassword)
                 
-                $emailBody = "The following errors were detected in the Git Installation run:`n`n" + ($errorLines -join "`n")
+                $emailBody = "The following errors were detected in the $ScriptName run:`n`n" + ($errorLines -join "`n")
                 
                 Import-Module PoshMailKit -ErrorAction Stop
                 Send-MKMailMessage -To $emailTo `
                                    -From $emailFrom `
-                                   -Subject "Script Alert: Git Installation Errors Detected" `
+                                   -Subject "Script Alert: $ScriptName Errors Detected" `
                                    -Body $emailBody `
                                    -SmtpServer "smtp.gmail.com" `
                                    -Port 587 `
@@ -185,4 +201,8 @@ try {
     }
 
     Write-Log "Script execution completed." -End
+}
+
+if ($scriptExitCode -ne 0) {
+    exit $scriptExitCode
 }
