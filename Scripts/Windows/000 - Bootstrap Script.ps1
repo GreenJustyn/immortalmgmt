@@ -78,12 +78,44 @@ try {
                 throw "The script folder $TargetScriptFolder does not exist."
             }
 
+            # Transition Cleanup: Remove legacy Tasks from 'JustynScripts' and delete the folder.
+            $oldTaskPath = "\JustynScripts"
+            try {
+                $oldTasks = Get-ScheduledTask -TaskPath $oldTaskPath -ErrorAction SilentlyContinue
+                if ($oldTasks) {
+                    Write-Log "Detected legacy Task Scheduler folder '$oldTaskPath' with $($oldTasks.Count) tasks. Starting cleanup..." "INFO"
+                    foreach ($oldTask in $oldTasks) {
+                        Write-Log "Unregistering legacy task: $($oldTask.Name) from '$oldTaskPath'" "INFO"
+                        if ($oldTask.State -eq "Running") {
+                            Stop-ScheduledTask -TaskName $oldTask.Name -TaskPath $oldTaskPath -ErrorAction SilentlyContinue
+                        }
+                        Unregister-ScheduledTask -TaskName $oldTask.Name -TaskPath $oldTaskPath -Confirm:$false -ErrorAction SilentlyContinue
+                    }
+                }
+
+                # Delete folder if empty/present
+                $schedule = New-Object -ComObject Schedule.Service
+                $schedule.Connect()
+                $rootFolder = $schedule.GetFolder("\")
+                try {
+                    $oldFolder = $rootFolder.GetFolder("JustynScripts")
+                    if ($null -ne $oldFolder) {
+                        $rootFolder.DeleteFolder("JustynScripts", 0)
+                        Write-Log "Successfully deleted legacy Task Scheduler folder 'JustynScripts'." "INFO"
+                    }
+                } catch {
+                    # Folder may already be deleted or not empty
+                }
+            } catch {
+                Write-Log "Warning: Legacy task/folder cleanup encountered an issue: $($_.Exception.Message)" "WARNING"
+            }
+
             $scripts = Get-ChildItem -Path $TargetScriptFolder -Filter "*.ps1" -File
             $baseIntervalMinutes = 2
             $incrementOffset = 0
 
             foreach ($script in $scripts) {
-                $taskName = "AutoRun_$($script.BaseName)"
+                $taskName = "$($script.BaseName)-immortalmgmt"
 
                 # Strict check: If task exists, skip it entirely
                 $existingTask = Get-ScheduledTask -TaskName $taskName -TaskPath $TaskPath -ErrorAction SilentlyContinue

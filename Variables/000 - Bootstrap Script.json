@@ -1,6 +1,6 @@
 {
     "ScriptFolder": "C:\\Scripts",
-    "TaskPath": "\\JustynScripts",
+    "TaskPath": "\\immortalmgmt",
     "ScriptsConfig": [
         {
             "ScriptName": "00 - Master Script.ps1",
