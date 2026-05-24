@@ -167,11 +167,7 @@ try {
     } catch {
         Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
         $scriptExitCode = 1
-    }
-} catch {
-    Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
-    $scriptExitCode = 1
-} finally {
+    } finally {
     # =====================================================================
     # Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
     # =====================================================================
