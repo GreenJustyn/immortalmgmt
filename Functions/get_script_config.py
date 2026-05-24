@@ -41,6 +41,10 @@ def main():
                     data = json.load(f)
                     if isinstance(data, dict):
                         for k, v in data.items():
+                            if isinstance(v, str):
+                                import re
+                                # Dynamic path interpolation: convert C:\Scripts references to the active framework base_dir
+                                v = re.sub(r'(?i)^C:\\Scripts', base_dir, v)
                             config_hash[k] = v
             except Exception:
                 pass

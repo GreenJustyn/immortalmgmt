@@ -41,9 +41,9 @@ Function Write-Log {
 # Variables used in a Describe/It -ForEach loop MUST be defined at 
 # the root level (not in BeforeAll) so Discovery can evaluate them.
 # =====================================================================
-if (-not $ScriptsDir) { $ScriptsDir = "C:\Scripts\Scripts\Windows" }
+if (-not $ScriptsDir) { $ScriptsDir = Join-Path $BaseDir "Scripts\Windows" }
 # Updated default to match your new standard variables folder
-if (-not $ConfigDir) { $ConfigDir = "C:\Scripts\Variables" } 
+if (-not $ConfigDir) { $ConfigDir = Join-Path $BaseDir "Variables" } 
 
 # Gather all PS1 files in the root scripts directory
 $TargetScripts = Get-ChildItem -Path $ScriptsDir -Filter "*.ps1" -File
@@ -155,10 +155,11 @@ Describe "Core Evergreen Infrastructure State" {
         }
 
         It "Should have the Master Logs directory present" {
-            if (-not (Test-Path "C:\Scripts\Logs")) { 
-                Write-Log "Compliance Failure: Directory C:\Scripts\Logs missing." "ERROR" 
+            $expectedLogsDir = Join-Path $BaseDir "Logs"
+            if (-not (Test-Path $expectedLogsDir)) { 
+                Write-Log "Compliance Failure: Directory $expectedLogsDir missing." "ERROR" 
             }
-            "C:\Scripts\Logs" | Should -PathExist
+            $expectedLogsDir | Should -PathExist
         }
     }
 

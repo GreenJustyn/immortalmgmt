@@ -38,7 +38,12 @@ function Merge-Json {
         try {
             $Json = Get-Content -Path $Path | ConvertFrom-Json
             foreach ($prop in $Json.psobject.Properties) {
-                $ConfigHash[$prop.Name] = $prop.Value
+                $val = $prop.Value
+                if ($null -ne $val -and $val -is [string]) {
+                    # Dynamic path interpolation: convert C:\Scripts references to the active framework $BaseDir
+                    $val = $val -replace "(?i)^C:\\Scripts", $BaseDir
+                }
+                $ConfigHash[$prop.Name] = $val
             }
         } catch {
             # Log or handle invalid JSON if needed, for now just skip
