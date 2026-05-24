@@ -47,6 +47,26 @@ try {
     $scriptExitCode = 0
 
     try {
+        # Operational Logic: Verify geographical timezone info
+        $tz = Get-TimeZone
+        $now = Get-Date
+        $offset = $tz.BaseUtcOffset
+        $hours = [Math]::Abs($offset.Hours)
+        $minutes = [Math]::Abs($offset.Minutes)
+        $sign = if ($offset.TotalSeconds -ge 0) { "+" } else { "-" }
+        $offsetStr = "$sign{0:02}:{1:02}" -f $hours, $minutes
+        
+        $dstStr = ""
+        if ($tz.SupportsDaylightSavingTime -and $tz.IsDaylightSavingTime($now)) {
+            $dstStr = " +1h DST"
+        }
+        
+        Write-Log "✅ Local Time: $($now.ToString('hh:mm tt')) | Timezone: $($tz.Id) (UTC$offsetStr$dstStr)" "INFO"
+        Write-Log "Timezone check completed successfully." "INFO"
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
     $scriptExitCode = 1
