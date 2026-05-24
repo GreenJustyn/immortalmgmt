@@ -64,7 +64,7 @@ try {
             # Catch any terminating script-level errors and log them
             Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
 
-        } finally {
+        }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
     $scriptExitCode = 1

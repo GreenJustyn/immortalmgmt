@@ -80,7 +80,7 @@ try {
     } catch {
         Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
         $scriptExitCode = 1
-    } finally {
+    }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
     $scriptExitCode = 1
