@@ -51,6 +51,29 @@ try {
     $scriptExitCode = 0
 
     try {
+        # Operational Logic: Get Windows Pagefile (Swap) Usage
+        $pagefiles = Get-CimInstance Win32_PageFileUsage
+        if ($null -eq $pagefiles -or $pagefiles.Count -eq 0) {
+            Write-Log "No active pagefiles (swap space) found on this system." "WARNING"
+        } else {
+            foreach ($pf in $pagefiles) {
+                $allocatedMB = $pf.AllocatedBaseSize
+                $currentMB = $pf.CurrentUsage
+                $usedPercent = if ($allocatedMB -gt 0) { [Math]::Round(($currentMB / $allocatedMB) * 100, 2) } else { 0 }
+                $freePercent = 100 - $usedPercent
+                
+                Write-Log "Pagefile '$($pf.Name)' | Allocated: ${allocatedMB}MB | Used: ${currentMB}MB (${usedPercent}%) | Free: ${freePercent}%" "INFO"
+                
+                if ($freePercent -lt $MinLevel) {
+                    Write-Log "LOW SWAP SPACE ALERT: Pagefile '$($pf.Name)' has only ${freePercent}% free space (Minimum: ${MinLevel}%)." "WARNING"
+                }
+            }
+            Write-Log "Swap space verification completed successfully." "INFO"
+        }
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
     $scriptExitCode = 1
