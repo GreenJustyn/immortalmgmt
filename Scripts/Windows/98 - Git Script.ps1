@@ -5,12 +5,6 @@
 
 # Requires -RunAsAdministrator
 
-if (-not $ScriptName) { $ScriptName = "98_Git_Install" } # Fallback if run unsaved in ISE/VSCode
-
-$configFilePath = "C:\Scripts\Variables\98 - Git.json"
-
-# 1. Native Write-Log Function with Severity Levels
-
 $ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$'',''
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
@@ -57,73 +51,66 @@ foreach ($prop in $Config.psobject.Properties) {
 $scriptExitCode = 0
 
 try {
-    $scriptExitCode = 0
+    $InstallDir = $Config.InstallDir
+    $DownloadDir = $Config.DownloadDir
 
-    try {
-        $InstallDir = $config.InstallDir
-            $DownloadDir = $config.DownloadDir
+    # Fetch Latest Release Info
+    Write-Log "Fetching latest Git release info from GitHub API..." "INFO"
+    $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+    $release = Invoke-RestMethod -Uri $apiUrl
+    $asset = $release.assets | Where-Object { $_.name -match "^PortableGit-.*-64-bit\.7z\.exe$" } | Select-Object -First 1
+    $installerPath = Join-Path -Path $DownloadDir -ChildPath $asset.name
 
-            # Fetch Latest Release Info
-            Write-Log "Fetching latest Git release info from GitHub API..." "INFO"
-            $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
-            $release = Invoke-RestMethod -Uri $apiUrl
-            $asset = $release.assets | Where-Object { $_.name -match "^PortableGit-.*-64-bit\.7z\.exe$" } | Select-Object -First 1
-            $installerPath = Join-Path -Path $DownloadDir -ChildPath $asset.name
+    # Download
+    if (-not (Test-Path $DownloadDir)) { New-Item -Path $DownloadDir -ItemType Directory -Force | Out-Null }
 
-            # Download
-            if (-not (Test-Path $DownloadDir)) { New-Item -Path $DownloadDir -ItemType Directory -Force | Out-Null }
+    if (-not (Test-Path $installerPath)) {
+        Write-Log "[DOWNLOAD] Downloading $($asset.name)..." "INFO"
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $installerPath
+    } else {
+        Write-Log "[DOWNLOAD] Installer $($asset.name) already exists locally. Skipping download." "INFO"
+    }
 
-            if (-not (Test-Path $installerPath)) {
-                Write-Log "[DOWNLOAD] Downloading $($asset.name)..." "INFO"
-                Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $installerPath
-            } else {
-                Write-Log "[DOWNLOAD] Installer $($asset.name) already exists locally. Skipping download." "INFO"
-            }
+    # Forced Silent Extraction
+    Write-Log "[UPDATE] Extracting silently to $InstallDir..." "INFO"
 
-            # Forced Silent Extraction
-            Write-Log "[UPDATE] Extracting silently to $InstallDir..." "INFO"
+    if (-not (Test-Path $InstallDir)) {
+        New-Item -Path $InstallDir -ItemType Directory -Force | Out-Null
+    }
 
-            if (-not (Test-Path $InstallDir)) {
-                New-Item -Path $InstallDir -ItemType Directory -Force | Out-Null
-            }
+    # We use Resolve-Path to ensure we have a full, absolute Windows path.
+    $fullPath = (Resolve-Path $InstallDir).Path.TrimEnd('\')
+    $argList = "-y", "-o$fullPath"
 
-            # We use Resolve-Path to ensure we have a full, absolute Windows path.
-            $fullPath = (Resolve-Path $InstallDir).Path.TrimEnd('\')
-            $argList = "-y", "-o$fullPath"
+    $process = Start-Process -FilePath $installerPath -ArgumentList $argList -Wait -PassThru -NoNewWindow
 
-            $process = Start-Process -FilePath $installerPath -ArgumentList $argList -Wait -PassThru -NoNewWindow
+    if ($process.ExitCode -ne 0) {
+        throw "Extraction failed with exit code $($process.ExitCode)."
+    }
 
-            if ($process.ExitCode -ne 0) {
-                throw "Extraction failed with exit code $($process.ExitCode)."
-            }
+    # Environment & PATH Update
+    $gitCmdPath = Join-Path -Path $InstallDir -ChildPath "cmd"
+    $gitExePath = Join-Path -Path $gitCmdPath -ChildPath "git.exe"
 
-            # Environment & PATH Update
-            $gitCmdPath = Join-Path -Path $InstallDir -ChildPath "cmd"
-            $gitExePath = Join-Path -Path $gitCmdPath -ChildPath "git.exe"
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine)
+    if ($machinePath -notlike "*$gitCmdPath*") {
+        Write-Log "Updating System PATH environment variable..." "INFO"
+        $newPath = "$machinePath;$gitCmdPath"
+        [Environment]::SetEnvironmentVariable('Path', $newPath, [EnvironmentVariableTarget]::Machine)
+        $env:Path = $newPath # Update current session
+    }
 
-            $machinePath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine)
-            if ($machinePath -notlike "*$gitCmdPath*") {
-                Write-Log "Updating System PATH environment variable..." "INFO"
-                $newPath = "$machinePath;$gitCmdPath"
-                [Environment]::SetEnvironmentVariable('Path', $newPath, [EnvironmentVariableTarget]::Machine)
-                $env:Path = $newPath # Update current session
-            }
+    # Non-Interactive Validation
+    Write-Log "[VERIFY] Checking installation..." "INFO"
+    Start-Sleep -Seconds 2 # Small delay to let the file system catch up
 
-            # Non-Interactive Validation
-            Write-Log "[VERIFY] Checking installation..." "INFO"
-            Start-Sleep -Seconds 2 # Small delay to let the file system catch up
-
-            if (Test-Path $gitExePath) {
-                $version = & $gitExePath --version
-                Write-Log "[SUCCESS] Git found at: $gitExePath" "INFO"
-                Write-Log "[INFO] $version" "INFO"
-            } else {
-                throw "Extraction reported success, but git.exe is missing from $gitExePath. Check if antivirus blocked the extraction."
-            }
-    } catch {
-        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
-        $scriptExitCode = 1
-    } finally {
+    if (Test-Path $gitExePath) {
+        $version = & $gitExePath --version
+        Write-Log "[SUCCESS] Git found at: $gitExePath" "INFO"
+        Write-Log "[INFO] $version" "INFO"
+    } else {
+        throw "Extraction reported success, but git.exe is missing from $gitExePath. Check if antivirus blocked the extraction."
+    }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
     $scriptExitCode = 1
@@ -139,7 +126,7 @@ try {
         $logContents = Get-Content -Path $LogFile
         
         foreach ($line in $logContents) {
-            if ($line -match "^\[(.*?)\] \[(.*?)\] \[(.*?)\] (.*)") {
+            if ($line -match "^\\[(.*?)\\] \\[(.*?)\\] \\[(.*?)\\] (.*)") {
                 $logDateStr = $matches[1]
                 $logLevel   = $matches[2]
                 
