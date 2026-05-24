@@ -34,6 +34,13 @@ $scriptExitCode = 0
 try {
     Write-Log "Initializing script execution." -Start
 
+    $Bypass = $true
+    if ($Bypass) {
+        Write-Log "Script bypass is active. Exiting immediately." "INFO"
+        Write-Log "Script execution completed." -End
+        exit 0
+    }
+
     # Load configuration using the Hiera helper
     $Config = . (Join-Path $BaseDir "Functions\Get-ScriptConfig.ps1") -ScriptName $ScriptName
     
