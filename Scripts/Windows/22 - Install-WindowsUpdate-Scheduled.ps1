@@ -86,6 +86,7 @@ try {
                     Write-Log "Installed: $($Result.Title) - Status: $($Result.Result)" "INFO"
                     if ($Result.RebootRequired) { $RequiresReboot = $true }
                 }
+            }
     } catch {
         Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
         $scriptExitCode = 1

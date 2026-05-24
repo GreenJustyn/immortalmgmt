@@ -47,6 +47,21 @@ try {
     $scriptExitCode = 0
 
     try {
+        # Operational Logic: Get local RAM information
+        $computer = Get-CimInstance Win32_ComputerSystem
+        $os = Get-CimInstance Win32_OperatingSystem
+        $totalGB = [Math]::Round($computer.TotalPhysicalMemory / 1GB, 2)
+        $freeGB = [Math]::Round($os.FreePhysicalMemory / 1MB, 2)
+        $usedGB = [Math]::Round($totalGB - $freeGB, 2)
+        $percentUsed = [Math]::Round(($usedGB / $totalGB) * 100, 2)
+        $percentFree = 100 - $percentUsed
+
+        Write-Log "✅ Total RAM: ${totalGB}GB | Used: ${usedGB}GB (${percentUsed}%) | Free: ${freeGB}GB (${percentFree}%)" "INFO"
+        Write-Log "Physical memory checks completed successfully." "INFO"
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
     $scriptExitCode = 1

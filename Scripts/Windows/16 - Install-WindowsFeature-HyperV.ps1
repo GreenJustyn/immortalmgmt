@@ -80,6 +80,10 @@ try {
             } else {
                 Write-Log "Feature $($Config.FeatureName) is already installed. No action taken." "INFO"
             }
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
     $scriptExitCode = 1

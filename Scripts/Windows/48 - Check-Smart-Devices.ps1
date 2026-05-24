@@ -47,6 +47,22 @@ try {
     $scriptExitCode = 0
 
     try {
+        # Operational Logic: Get Windows Disk SMART status
+        $disks = Get-CimInstance -Namespace root\wmi -ClassName MSStorageDriver_FailurePredictStatus
+        if ($null -eq $disks -or $disks.Count -eq 0) {
+            Write-Log "No failure predict status found for storage drives." "INFO"
+        } else {
+            foreach ($disk in $disks) {
+                $status = if ($disk.PredictFailure) { "FAILING" } else { "OK" }
+                $level = if ($disk.PredictFailure) { "CRITICAL" } else { "INFO" }
+                Write-Log "Drive '$($disk.InstanceName)' | SMART Status: $status | Reason Code: $($disk.Reason)" $level
+            }
+            Write-Log "SMART controller integrity audit completed successfully." "INFO"
+        }
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
     $scriptExitCode = 1

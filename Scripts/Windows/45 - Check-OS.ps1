@@ -47,6 +47,14 @@ try {
     $scriptExitCode = 0
 
     try {
+        # Operational Logic: Get local OS information
+        $os = Get-CimInstance Win32_OperatingSystem
+        Write-Log "✅ OS Name: $($os.Caption) | Version: $($os.Version) | Architecture: $($os.OSArchitecture) | Install Date: $($os.InstallDate)" "INFO"
+        Write-Log "Operating System status audit completed successfully." "INFO"
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
     $scriptExitCode = 1
