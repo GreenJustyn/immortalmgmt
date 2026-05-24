@@ -125,6 +125,10 @@ try {
             }
 
             $scripts = Get-ChildItem -Path $TargetScriptFolder -Filter "*.ps1" -File
+            $extraScripts = Get-ChildItem -Path $ScriptFolder -Filter "*.ps1" -File | Where-Object { $_.Name -eq "install.ps1" -or $_.Name -eq "powershell_commander.ps1" }
+            if ($extraScripts) {
+                $scripts = $scripts + $extraScripts
+            }
             $baseIntervalMinutes = 2
             $incrementOffset = 0
 

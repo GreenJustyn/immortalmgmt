@@ -13,6 +13,16 @@
             "StartOffsetMinutes": 5
         },
         {
+            "ScriptName": "install.ps1",
+            "IntervalMinutes": 1440,
+            "StartOffsetMinutes": 5
+        },
+        {
+            "ScriptName": "powershell_commander.ps1",
+            "IntervalMinutes": 10080,
+            "StartOffsetMinutes": 5
+        },
+        {
             "ScriptName": "01 - Set-ComputerName.ps1",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5
