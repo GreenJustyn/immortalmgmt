@@ -1,17 +1,13 @@
 # Requires -RunAsAdministrator
 
-if (-not $ScriptName) { $ScriptName = "000_Bootstrap" } # Fallback if run unsaved in ISE/VSCode
-
-
-$configFilePath = Join-Path (Join-Path $BaseDir "Variables") "000 - Bootstrap.json"
-$credFilePath   = Join-Path (Join-Path $BaseDir "Credentials") "bootstrap.xml"
-$taskUser       = "Administrator" # Change to "DOMAIN\Administrator" or ".\Administrator" if needed
-
-# 1. Native Write-Log Function with Severity Levels
-
 $ScriptName  = $MyInvocation.MyCommand.Name -replace '\.tests\.ps1$','' -replace '\.ps1$',''
+if (-not $ScriptName -or $ScriptName -eq "") { $ScriptName = "000_Bootstrap" } # Fallback if run unsaved in ISE/VSCode
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
+
+$configFilePath = Join-Path (Join-Path $BaseDir "Variables") "000 - Bootstrap Script.json"
+$credFilePath   = Join-Path (Join-Path $BaseDir "Credentials") "bootstrap.xml"
+$taskUser       = "Administrator" # Change to "DOMAIN\Administrator" or ".\Administrator" if needed
 
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
 $ConfigFile  = Join-Path (Join-Path $BaseDir "Variables") "$ScriptName.json"
@@ -57,9 +53,23 @@ $scriptExitCode = 0
 try {
     $scriptExitCode = 0
 
+    # Decrypt the task registration password from bootstrap.xml
+    if (-not (Test-Path $credFilePath)) {
+        throw "Encrypted bootstrap credential file not found at $credFilePath. Please ensure you created it using Step 5 of BOOTSTRAP.md."
+    }
+    try {
+        $secureString = Import-Clixml -Path $credFilePath
+        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureString)
+        $taskPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    } catch {
+        throw "Failed to decrypt bootstrap password: $($_.Exception.Message)"
+    } finally {
+        if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
+    }
+
     try {
         $ScriptFolder = $config.ScriptFolder
-                $TaskPath = $config.TaskPath
+        $TaskPath = $config.TaskPath
 
                 $manifestSettings = @{}
                 if ($null -ne $config.ScriptsConfig) {
