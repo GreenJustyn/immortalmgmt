@@ -47,6 +47,43 @@ try {
     $scriptExitCode = 0
 
     try {
+        # Operational Logic: Check if a system reboot is pending
+        $pendingReboot = $false
+        $reasons = @()
+
+        # 1. CBS RebootPending check
+        if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") {
+            $pendingReboot = $true
+            $reasons += "Component Based Servicing (CBS) RebootPending key exists."
+        }
+
+        # 2. Windows Update RebootRequired check
+        if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired") {
+            $pendingReboot = $true
+            $reasons += "Windows Update RebootRequired key exists."
+        }
+
+        # 3. PendingFileRenameOperations check
+        $renameOperations = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name "PendingFileRenameOperations" -ErrorAction SilentlyContinue
+        if ($null -ne $renameOperations -and $null -ne $renameOperations.PendingFileRenameOperations) {
+            $pendingReboot = $true
+            $reasons += "Session Manager has PendingFileRenameOperations registered."
+        }
+
+        # Log results
+        if ($pendingReboot) {
+            Write-Log "⚠️ PENDING REBOOT DETECTED!" "WARNING"
+            foreach ($reason in $reasons) {
+                Write-Log "  Reason: $reason" "WARNING"
+            }
+        } else {
+            Write-Log "✅ No pending reboot detected. System is cleanly booted." "INFO"
+        }
+        Write-Log "Pending reboot evaluation completed successfully." "INFO"
+    } catch {
+        Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+        $scriptExitCode = 1
+    }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
     $scriptExitCode = 1
