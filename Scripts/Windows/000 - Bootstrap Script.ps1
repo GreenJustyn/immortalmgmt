@@ -103,7 +103,11 @@ try {
                     }
                 }
 
-                # Delete folder if empty/present
+                # Double-check force delete with native schtasks for any hidden/residual tasks in JustynScripts
+                Write-Log "Performing native force cleanup on 'JustynScripts' tasks..." "INFO"
+                & schtasks.exe /Delete /TN "JustynScripts\*" /F *>$null
+
+                # Delete the empty folder 'JustynScripts' using COM Object
                 $schedule = New-Object -ComObject Schedule.Service
                 $schedule.Connect()
                 $rootFolder = $schedule.GetFolder("\")
