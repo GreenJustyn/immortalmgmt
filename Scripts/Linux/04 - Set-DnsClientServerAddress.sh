@@ -114,7 +114,7 @@ write_log "Initializing script execution." "INFO"
 
 # Load Config
 CONFIG_FILE_CORRECT="$BASE_DIR/Variables/$SCRIPT_NAME.json"
-CONFIG_FILE_TYPO="$BASE_DIR/Variables/04 - Set-DnsClientServerAdress.json"
+CONFIG_FILE_TYPO="$BASE_DIR/Variables/04 - Set-DnsClientServerAddress.json"
 
 if [ -f "$CONFIG_FILE_CORRECT" ]; then
     CONFIG_FILE="$CONFIG_FILE_CORRECT"
