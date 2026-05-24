@@ -48,6 +48,13 @@ $scriptExitCode = 0
 try {
     $scriptExitCode = 0
 
+    $Bypass = $true
+    if ($Bypass) {
+        Write-Log "Script bypass is active. Exiting immediately." "INFO"
+        Write-Log "Script execution completed." -End
+        exit 0
+    }
+
     try {
         if (-not (Test-Path $CredFile)) { 
                 throw "FATAL: Credential XML missing at $CredFile." 
