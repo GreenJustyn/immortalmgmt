@@ -107,7 +107,7 @@ Describe "Infrastructure Automation Codebase Integrity" {
                 Write-Log "Missing JSON config file for $($_.Name)." "WARNING"
             }
 
-            $ExpectedJsonPath | Should -FileExist
+            $ExpectedJsonPath | Should -Exist
         }
 
         It "Should contain valid JSON data in <_.Name>.json" -ForEach $TargetScripts {
@@ -159,7 +159,7 @@ Describe "Core Evergreen Infrastructure State" {
             if (-not (Test-Path $expectedLogsDir)) { 
                 Write-Log "Compliance Failure: Directory $expectedLogsDir missing." "ERROR" 
             }
-            $expectedLogsDir | Should -PathExist
+            $expectedLogsDir | Should -Exist
         }
     }
 
