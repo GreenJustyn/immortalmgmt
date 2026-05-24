@@ -13,18 +13,6 @@
             "StartOffsetMinutes": 5
         },
         {
-            "ScriptName": "install.ps1",
-            "IntervalMinutes": 1440,
-            "StartOffsetMinutes": 5,
-            "DisplayName": "54 - Install-ImmortalMgmt"
-        },
-        {
-            "ScriptName": "powershell_commander.ps1",
-            "IntervalMinutes": 10080,
-            "StartOffsetMinutes": 5,
-            "DisplayName": "55 - PowerShell-Commander"
-        },
-        {
             "ScriptName": "01 - Set-ComputerName.ps1",
             "IntervalMinutes": 10080,
             "StartOffsetMinutes": 5

@@ -120,15 +120,20 @@ try {
                 } catch {
                     # Folder may already be deleted or not empty
                 }
+
+                # Clean up any previously registered install or commander tasks in the new folder
+                $oneOffTasks = @("install-immortalmgmt", "powershell_commander-immortalmgmt", "54 - Install-ImmortalMgmt-immortalmgmt", "55 - PowerShell-Commander-immortalmgmt")
+                foreach ($oneOffTask in $oneOffTasks) {
+                    if (Get-ScheduledTask -TaskName $oneOffTask -TaskPath $TaskPath -ErrorAction SilentlyContinue) {
+                        Write-Log "Removing one-off interactive task: $oneOffTask from '$TaskPath'" "INFO"
+                        Unregister-ScheduledTask -TaskName $oneOffTask -TaskPath $TaskPath -Confirm:$false -ErrorAction SilentlyContinue
+                    }
+                }
             } catch {
                 Write-Log "Warning: Legacy task/folder cleanup encountered an issue: $($_.Exception.Message)" "WARNING"
             }
 
             $scripts = Get-ChildItem -Path $TargetScriptFolder -Filter "*.ps1" -File
-            $extraScripts = Get-ChildItem -Path $ScriptFolder -Filter "*.ps1" -File | Where-Object { $_.Name -eq "install.ps1" -or $_.Name -eq "powershell_commander.ps1" }
-            if ($extraScripts) {
-                $scripts = $scripts + $extraScripts
-            }
             $baseIntervalMinutes = 2
             $incrementOffset = 0
 
