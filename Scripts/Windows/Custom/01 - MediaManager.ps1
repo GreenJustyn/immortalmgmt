@@ -49,8 +49,8 @@ $destMoviesPath      = $config.destMoviesPath
 $destTvPath          = $config.destTvPath
 
 # --- Logging & Settings ---
-$logFilePath         = $config.logFilePathRsync
-$masterLogPath       = $config.logFilePathRsync
+$logFilePath         = $LogFile
+$masterLogPath       = $LogFile
 $emailTo             = $config.emailTo
 $emailFrom           = $config.emailFrom
 $appPassword         = $config.appPassword
