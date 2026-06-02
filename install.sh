@@ -303,6 +303,27 @@ for root, dirs, files in os.walk(base_dir):
                 pass
 ' "$BASE_DIR" "$ENVIRONMENT"
 
+# =====================================================================
+# Step 6: Service Account Provisioning & Security Hardening
+# =====================================================================
+echo ""
+echo -e "\e[32m[STEP 6] Provisioning Service Account & Hardening Security\e[0m"
+echo -e "\e[90mExecuting New-LocalAdminAccount script to create 'svc_immortalmgmt' and lock down repository...\e[0m"
+
+ACCOUNT_SCRIPT="$BASE_DIR/Scripts/Linux/30 - New-LocalAdminAccount.sh"
+if [ -f "$ACCOUNT_SCRIPT" ]; then
+    chmod +x "$ACCOUNT_SCRIPT"
+    if [ "$EUID" -ne 0 ]; then
+        echo -e "\e[33mWarning: This script must be run as root (sudo) to create local accounts. Prompting for sudo...\e[0m"
+        sudo "$ACCOUNT_SCRIPT"
+    else
+        "$ACCOUNT_SCRIPT"
+    fi
+    echo -e "\e[32mService account created and repository security hardened successfully!\e[0m"
+else
+    write_log "Warning: 30 - New-LocalAdminAccount.sh not found." "WARNING"
+fi
+
 echo ""
 echo -e "\e[36m================================================================="
 echo -e "      INSTALLATION AND INITIAL CONFIGURATION COMPLETE!          "

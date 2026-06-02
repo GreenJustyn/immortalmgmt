@@ -250,6 +250,24 @@ try {
         }
     }
     
+    # =====================================================================
+    # Step 6: Service Account Provisioning & Security Hardening
+    # =====================================================================
+    Write-Host ""
+    Write-Host "[STEP 6] Provisioning Service Account & Hardening Security" -ForegroundColor Green
+    Write-Host "Executing New-LocalAdminAccount script to create 'svc_immortalmgmt' and lock down repository..." -ForegroundColor Gray
+    
+    $AccountScript = Join-Path (Join-Path $BaseDir "Scripts\Windows") "30 - New-LocalAdminAccount.ps1"
+    if (Test-Path $AccountScript) {
+        try {
+            & $AccountScript
+            Write-Host "Service account created and repository security hardened successfully!" -ForegroundColor Green
+        } catch {
+            Write-Log "Warning: Interactive service account setup returned an error: $($_.Exception.Message)" "WARNING"
+            Write-Host "Warning: Service account setup returned an error. Please ensure it is run manually." -ForegroundColor Yellow
+        }
+    }
+    
     Write-Host ""
     Write-Host "=================================================================" -ForegroundColor Cyan
     Write-Host "      INSTALLATION AND INITIAL CONFIGURATION COMPLETE!          " -ForegroundColor Green
