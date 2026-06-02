@@ -158,9 +158,19 @@ for c in scripts_config:
         linux_key = c["LinuxName"].replace(".sh", "")
         config_map[linux_key] = c
 
-# Get current crontab
+# Resolve service account name
+account_name = "svc_immortalmgmt"
+account_config_path = os.path.join(os.path.dirname(config_file), "30 - New-LocalAdminAccount.json")
+if os.path.exists(account_config_path):
+    try:
+        with open(account_config_path, "r") as f:
+            account_name = json.load(f).get("AccountName", "svc_immortalmgmt")
+    except:
+        pass
+
+# Get current crontab for the specific user
 try:
-    current_cron = subprocess.check_output(["crontab", "-l"], stderr=subprocess.DEVNULL).decode("utf-8")
+    current_cron = subprocess.check_output(["crontab", "-u", account_name, "-l"], stderr=subprocess.DEVNULL).decode("utf-8")
 except subprocess.CalledProcessError:
     current_cron = ""
 
@@ -172,12 +182,11 @@ for line in current_lines:
     if "# AutoRun_" not in line:
         new_cron_lines.append(line)
 
-# Find all .sh scripts
-for root, dirs, files in os.walk(script_dir):
-    for file in files:
-        if file.endswith(".sh") and file != "000 - Bootstrap Script.sh":
-            base_name = file.replace(".sh", "")
-            script_path = os.path.join(root, file)
+# Find all .sh scripts in the root directory only (ignore nested Custom/ scripts)
+for file in os.listdir(script_dir):
+    script_path = os.path.join(script_dir, file)
+    if os.path.isfile(script_path) and file.endswith(".sh") and file != "000 - Bootstrap Script.sh":
+        base_name = file.replace(".sh", "")
             
             # Find interval
             interval = 1440 # Default daily
@@ -201,16 +210,16 @@ for root, dirs, files in os.walk(script_dir):
             new_cron_lines.append(cron_line)
             print(f"INFO: Scheduled {file} with interval {interval} mins ({cron_expr})")
 
-# Update crontab
+# Update crontab for the specific user
 cron_text = "\n".join(new_cron_lines) + "\n"
-process = subprocess.Popen(["crontab", "-"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+process = subprocess.Popen(["crontab", "-u", account_name, "-"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 stdout, stderr = process.communicate(input=cron_text.encode("utf-8"))
 
 if process.returncode != 0:
-    print(f"CRITICAL: Failed to update crontab: {stderr.decode('utf-8')}")
+    print(f"CRITICAL: Failed to update crontab for {account_name}: {stderr.decode('utf-8')}")
     sys.exit(1)
 else:
-    print("INFO: Crontab updated successfully.")
+    print(f"INFO: Crontab for {account_name} updated successfully.")
 ' "$SCRIPT_DIR" "$CONFIG_FILE" "$GLOBAL_FILE"
 
 write_log "Bootstrap script execution completed." "INFO"

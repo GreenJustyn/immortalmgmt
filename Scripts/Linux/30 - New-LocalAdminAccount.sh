@@ -117,8 +117,29 @@ ACCOUNT_NAME=$(python3 -c "import json, sys; print(json.loads(sys.argv[1]).get('
 ACCOUNT_DESC=$(python3 -c "import json, sys; print(json.loads(sys.argv[1]).get('AccountDescription', ''))" "$CONFIG_JSON")
 GROUP_NAME=$(python3 -c "import json, sys; print(json.loads(sys.argv[1]).get('GroupName', 'sudo'))" "$CONFIG_JSON")
 
-# Fallback password from config if not in credential.xml
-PASSWORD=$(python3 -c "import json, sys; print(json.loads(sys.argv[1]).get('Password', ''))" "$CONFIG_JSON")
+# Load password from secure Credentials/svc_immortalmgmt.pwd if available, else prompt or fallback
+PWD_FILE="$BASE_DIR/Credentials/svc_immortalmgmt.pwd"
+if [ ! -f "$PWD_FILE" ]; then
+    if [ -t 0 ]; then
+        write_log "Credentials file missing at $PWD_FILE. Prompting..." "WARNING"
+        echo ""
+        echo "--------------------------------------------------"
+        echo "CREATING DEDICATED SERVICE ACCOUNT CREDENTIALS"
+        echo "--------------------------------------------------"
+        read -sp "Enter secure password for local user '$ACCOUNT_NAME': " PASSWORD
+        echo ""
+        mkdir -p "$(dirname "$PWD_FILE")"
+        echo -n "$PASSWORD" > "$PWD_FILE"
+        chmod 600 "$PWD_FILE"
+        chown root:root "$PWD_FILE" 2>/dev/null || true
+        write_log "Successfully saved secure password to $PWD_FILE." "INFO"
+    else
+        PASSWORD=$(python3 -c "import json, sys; print(json.loads(sys.argv[1]).get('Password', ''))" "$CONFIG_JSON")
+    fi
+else
+    PASSWORD=$(cat "$PWD_FILE")
+    write_log "Loaded password from secure credential file." "INFO"
+fi
 
 write_log "Loaded Configuration Variables:" "INFO"
 write_log "  AccountName = $ACCOUNT_NAME" "INFO"
@@ -183,6 +204,14 @@ else
     
     write_log "Account state enforcement complete." "INFO"
 fi
+
+# Hardening Permissions for the framework repository
+write_log "Hardening file and folder permissions on the repository at '$BASE_DIR'..." "INFO"
+chown -R "$ACCOUNT_NAME":root "$BASE_DIR"
+chmod -R 700 "$BASE_DIR"
+chmod +x "$BASE_DIR"/Scripts/Linux/*.sh
+chmod +x "$BASE_DIR"/install.sh
+write_log "Directory permissions hardened successfully. Only root and '$ACCOUNT_NAME' are allowed." "INFO"
 
 write_log "Script execution completed successfully." "INFO"
 post_flight

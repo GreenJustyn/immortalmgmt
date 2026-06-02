@@ -6,13 +6,13 @@ $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 
 $configFilePath = Join-Path (Join-Path $BaseDir "Variables") "000 - Bootstrap Script.json"
-$credFilePath   = Join-Path (Join-Path $BaseDir "Credentials") "bootstrap.xml"
-$taskUser       = "Administrator" # Change to "DOMAIN\Administrator" or ".\Administrator" if needed
+$credFilePath   = Join-Path (Join-Path $BaseDir "Credentials") "svc_immortalmgmt.xml"
+$taskUser       = "svc_immortalmgmt" # Change to "DOMAIN\Administrator" or ".\Administrator" if needed
 
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
 $ConfigFile  = Join-Path (Join-Path $BaseDir "Variables") "$ScriptName.json"
 $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
-$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
+$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "svc_immortalmgmt.xml"
 $Environment = "#{ENVIRONMENT}#"
 
 Function Write-Log {
@@ -53,16 +53,22 @@ $scriptExitCode = 0
 try {
     $scriptExitCode = 0
 
-    # Decrypt the task registration password from bootstrap.xml
+    # Decrypt the task registration password from svc_immortalmgmt.xml
     if (-not (Test-Path $credFilePath)) {
-        throw "Encrypted bootstrap credential file not found at $credFilePath. Please ensure you created it using Step 5 of BOOTSTRAP.md."
+        throw "Encrypted service account credential file not found at $credFilePath. Please ensure you created it using install.ps1 or New-LocalAdminAccount.ps1."
     }
     try {
-        $secureString = Import-Clixml -Path $credFilePath
+        $SvcCreds = Import-Clixml -Path $credFilePath
+        if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
+            $secureString = $SvcCreds.Password
+            $taskUser = $SvcCreds.UserName
+        } else {
+            $secureString = $SvcCreds # Assume it is the SecureString itself
+        }
         $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureString)
         $taskPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
     } catch {
-        throw "Failed to decrypt bootstrap password: $($_.Exception.Message)"
+        throw "Failed to decrypt service account password: $($_.Exception.Message)"
     } finally {
         if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
     }

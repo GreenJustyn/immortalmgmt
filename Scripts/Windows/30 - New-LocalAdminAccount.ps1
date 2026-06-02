@@ -7,7 +7,7 @@ $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
 $ConfigFile  = Join-Path (Join-Path $BaseDir "Variables") "$ScriptName.json"
 $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
-$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
+$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "svc_immortalmgmt.xml"
 $Environment = "#{ENVIRONMENT}#"
 
 Function Write-Log {
@@ -49,9 +49,25 @@ try {
     $scriptExitCode = 0
 
     try {
-        # Credential Check
+        # Credential Check & Interactive Generation
             if (-not (Test-Path $CredFile)) { 
-                throw "FATAL: Credential XML missing at $CredFile." 
+                if ([Environment]::UserInteractive) {
+                    Write-Log "Credential XML missing at $CredFile. Prompting to create it..." "WARNING"
+                    Write-Host ""
+                    Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+                    Write-Host "CREATING DEDICATED SERVICE ACCOUNT CREDENTIALS" -ForegroundColor Yellow
+                    Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+                    $PasswordInput = Read-Host -AsSecureString "Enter secure password for local user '$($Config.AccountName)'"
+                    
+                    # Create credential object and export
+                    $CredObject = New-Object System.Management.Automation.PSCredential($Config.AccountName, $PasswordInput)
+                    $CredFolder = Split-Path $CredFile
+                    if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
+                    $CredObject | Export-Clixml -Path $CredFile
+                    Write-Log "Successfully created encrypted credential file at $CredFile." "INFO"
+                } else {
+                    throw "FATAL: Credential XML missing at $CredFile and session is non-interactive."
+                }
             }
             try { 
                 $SvcCreds = Import-Clixml -Path $CredFile 
@@ -90,6 +106,30 @@ try {
                 }
                 Write-Log "Account exists. State enforcement complete." "INFO"
             }
+
+            # Hardening Permissions for the framework repository
+            Write-Log "Hardening file and folder permissions on the repository at '$BaseDir'..." "INFO"
+            $Acl = Get-Acl -Path $BaseDir
+            
+            # Disable inheritance and copy existing rules as inherited ones are removed
+            $Acl.SetAccessRuleProtection($true, $false)
+            
+            # Clear all explicit rules to start clean
+            $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+            
+            # Define strict permissions: only SYSTEM, Administrators, and svc_immortalmgmt have access
+            $Rules = @(
+                New-Object System.Security.AccessControl.FileSystemAccessRule("SYSTEM", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"),
+                New-Object System.Security.AccessControl.FileSystemAccessRule("Administrators", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"),
+                New-Object System.Security.AccessControl.FileSystemAccessRule($Config.AccountName, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
+            )
+            
+            foreach ($Rule in $Rules) {
+                $Acl.AddAccessRule($Rule)
+            }
+            
+            Set-Acl -Path $BaseDir -AclObject $Acl -ErrorAction Stop
+            Write-Log "Directory permissions hardened successfully. Only SYSTEM, Administrators, and '$($Config.AccountName)' are allowed." "INFO"
     } catch {
         Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
         $scriptExitCode = 1

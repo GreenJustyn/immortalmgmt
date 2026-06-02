@@ -35,20 +35,51 @@ Function Write-Log {
 }
 
 try {
-    Write-Log "Initializing Install script execution." -Start
+    Write-Log "Initializing Guided Install wizard." -Start
 
-    # Load Global Config for Email
-    if (-not (Test-Path $GlobalFile)) {
-        throw "Global configuration file not found at $GlobalFile."
+    Write-Host ""
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    Write-Host "      IMMORTALMGMT AUTOMATION FRAMEWORK INSTALLATION WIZARD      " -ForegroundColor Cyan
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    # =====================================================================
+    # Step 1: Installation Directory Setup & File Migration
+    # =====================================================================
+    Write-Host "[STEP 1] Installation Path Configuration" -ForegroundColor Green
+    $DefaultPath = "C:\ImmortalMgmt"
+    $UserInputPath = Read-Host "Enter target installation directory [Default: $DefaultPath]"
+    $InstallPath = if ([string]::IsNullOrWhiteSpace($UserInputPath)) { $DefaultPath } else { $UserInputPath }
+
+    Write-Log "Target installation path resolved to: $InstallPath" "INFO"
+
+    if ($InstallPath -ne $BaseDir) {
+        Write-Host "Creating directory and copying repository files to $InstallPath..." -ForegroundColor Gray
+        if (-not (Test-Path $InstallPath)) {
+            New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
+        }
+        
+        # Copy all folders and files except itself recursively
+        $ExcludeList = @("install.log")
+        Get-ChildItem -Path $BaseDir -Exclude $ExcludeList | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination $InstallPath -Recurse -Force
+        }
+        
+        # Re-target variables to the new installation path
+        $BaseDir = $InstallPath
+        $LogsDir = Join-Path $BaseDir "Logs"
+        $LogFile = Join-Path $LogsDir "$ScriptName.log"
+        $GlobalFile = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
+        Write-Host "Files migrated successfully to $InstallPath." -ForegroundColor Green
+    } else {
+        Write-Host "Running installation in-place at $BaseDir." -ForegroundColor Green
     }
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
 
     # =====================================================================
-    # Dependency Check: NuGet & PoshMailKit (Non-standard for PS 5.1)
+    # Step 2: Dependency Checks & Installations
     # =====================================================================
-    Write-Log "Performing dependency checks for non-standard modules..." "INFO"
-
-    # Enable TLS 1.2 (Required for PSGallery in older systems/configurations)
+    Write-Host ""
+    Write-Host "[STEP 2] Performing dependency checks..." -ForegroundColor Green
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
     # 1. NuGet Provider
@@ -68,9 +99,8 @@ try {
     # 2. PoshMailKit Module
     $PoshMailKit = Get-Module -Name PoshMailKit -ListAvailable -ErrorAction SilentlyContinue
     if (-not $PoshMailKit) {
-        Write-Log "PoshMailKit module missing. Installing from PSGallery..." "INFO"
+        Write-Log "PoshMailKit module missing. Installing..." "INFO"
         try {
-            # Ensure PSGallery is trusted to avoid prompts
             $Repo = Get-PSRepository -Name "PSGallery" -ErrorAction SilentlyContinue
             if ($Repo -and $Repo.InstallationPolicy -ne "Trusted") {
                 Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted -ErrorAction Stop
@@ -84,54 +114,67 @@ try {
         Write-Log "PoshMailKit module is available." "INFO"
     }
 
+    # =====================================================================
+    # Step 3: Global Variables Configuration (Email Details)
+    # =====================================================================
+    Write-Host ""
+    Write-Host "[STEP 3] Global Configuration Setup (Email Alerting)" -ForegroundColor Green
+    
+    $EmailTo = ""
+    $EmailFrom = ""
+    $EmailAppPassword = ""
+    
+    $ConfigureEmail = Read-Host "Do you want to configure email alerts now? (Y/N) [Default: Y]"
+    if ([string]::IsNullOrWhiteSpace($ConfigureEmail) -or $ConfigureEmail.ToUpper().Trim() -eq "Y") {
+        $EmailTo = Read-Host "Enter alert recipient email address (EmailTo)"
+        $EmailFrom = Read-Host "Enter alert sender email address (EmailFrom)"
+        $EmailAppPassword = Read-Host "Enter App-Specific Gmail Password (EmailAppPassword)"
+    }
 
-    # Identify Hostname
+    # Load and update Global configuration
+    $GlobalConfig = [ordered]@{
+        EmailTo          = $EmailTo
+        EmailFrom        = $EmailFrom
+        EmailAppPassword = $EmailAppPassword
+    }
+    
+    $GlobalConfig | ConvertTo-Json -Depth 5 | Out-File -FilePath $GlobalFile -Force
+    Write-Log "Created / Updated global configuration at $GlobalFile." "INFO"
+
+    # =====================================================================
+    # Step 4: Host Specific Setup & System Inventory
+    # =====================================================================
+    Write-Host ""
+    Write-Host "[STEP 4] Host Inventory Setup" -ForegroundColor Green
     $Hostname = $env:COMPUTERNAME
     Write-Log "Identified local hostname: $Hostname" "INFO"
 
-    # Create Hosts folder if it doesn't exist
     $HostsDir = Join-Path (Join-Path $BaseDir "Variables") "Hosts"
     if (-not (Test-Path $HostsDir)) {
         New-Item -Path $HostsDir -ItemType Directory -Force | Out-Null
-        Write-Log "Created Hosts directory: $HostsDir" "INFO"
     }
 
-    # Create Host specific folder
     $HostDir = Join-Path $HostsDir $Hostname
     if (-not (Test-Path $HostDir)) {
         New-Item -Path $HostDir -ItemType Directory -Force | Out-Null
-        Write-Log "Created Host directory: $HostDir" "INFO"
-    } else {
-        Write-Log "Host directory already exists: $HostDir" "INFO"
     }
 
-    # Copy files from DefaultHost
     $DefaultHostDir = Join-Path $HostsDir "DefaultHost"
     if (Test-Path $DefaultHostDir) {
-        $files = Get-ChildItem -Path $DefaultHostDir
-        foreach ($file in $files) {
-            $destFile = Join-Path $HostDir $file.Name
+        Get-ChildItem -Path $DefaultHostDir | ForEach-Object {
+            $destFile = Join-Path $HostDir $_.Name
             if (-not (Test-Path $destFile)) {
-                Copy-Item -Path $file.FullName -Destination $destFile -Force
-                Write-Log "Copied $($file.Name) to $HostDir" "INFO"
-            } else {
-                Write-Log "$($file.Name) already exists in $HostDir. Skipping copy." "INFO"
+                Copy-Item -Path $_.FullName -Destination $destFile -Force
             }
         }
-    } else {
-        Write-Log "DefaultHost directory not found at $DefaultHostDir. Cannot copy default files." "WARNING"
     }
 
-    # Populate .keep if needed
     $KeepFile = Join-Path $HostDir ".keep"
     if (-not (Test-Path $KeepFile)) {
         "This folder is for host $Hostname variables." | Out-File -FilePath $KeepFile -Force
-        Write-Log "Created .keep file in $HostDir" "INFO"
     }
 
-    # Advanced/Detailed: Gather System Info and create _Host.json
     Write-Log "Gathering system information for $Hostname..." "INFO"
-    
     $OSInfo = Get-CimInstance Win32_OperatingSystem
     $CPUInfo = Get-CimInstance Win32_Processor
     $MemInfo = Get-CimInstance Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum
@@ -155,86 +198,69 @@ try {
 
     $HostVarsFile = Join-Path $HostDir "_Host.json"
     $HostVars | ConvertTo-Json -Depth 5 | Out-File -FilePath $HostVarsFile -Force
-    Write-Log "Created thorough set of variables in $HostVarsFile" "INFO"
+    Write-Log "Created thorough set of host variables in $HostVarsFile" "INFO"
 
     # Update .gitignore
     $GitIgnoreFile = Join-Path $BaseDir ".gitignore"
     $IgnoreEntry = "Variables/Hosts/$Hostname/"
-
     if (Test-Path $GitIgnoreFile) {
         $GitIgnoreContent = Get-Content -Path $GitIgnoreFile
         if ($GitIgnoreContent -notcontains $IgnoreEntry) {
             $IgnoreEntry | Out-File -FilePath $GitIgnoreFile -Append
-            Write-Log "Added $IgnoreEntry to .gitignore" "INFO"
-        } else {
-            Write-Log "$IgnoreEntry already present in .gitignore" "INFO"
         }
     } else {
         $IgnoreEntry | Out-File -FilePath $GitIgnoreFile -Force
-        Write-Log "Created .gitignore and added $IgnoreEntry" "INFO"
     }
+
+    # =====================================================================
+    # Step 5: Environment Placeholder Validation & Customization
+    # =====================================================================
+    Write-Host ""
+    Write-Host "[STEP 5] Environment Variable Validation" -ForegroundColor Green
+    
+    # Display Environment Choice
+    Write-Host "Select framework environment to configure:" -ForegroundColor Gray
+    Write-Host "  1) Production"
+    Write-Host "  2) Staging"
+    Write-Host "  3) Development"
+    Write-Host "  4) Custom"
+    
+    $EnvChoice = Read-Host "Enter choice (1-4) [Default: 1]"
+    $ResolvedEnv = switch ($EnvChoice) {
+        "1" { "Production" }
+        "2" { "Staging" }
+        "3" { "Development" }
+        "4" { Read-Host "Enter custom environment name" }
+        default { "Production" }
+    }
+    
+    if ([string]::IsNullOrWhiteSpace($ResolvedEnv)) { $ResolvedEnv = "Production" }
+    $Environment = $ResolvedEnv
+    Write-Log "Resolved environment context: $Environment" "INFO"
+
+    # Replace environment placeholder across all script files inside the installation directory
+    Write-Host "Enforcing environment context across script files..." -ForegroundColor Gray
+    $FilesToScan = Get-ChildItem -Path $BaseDir -Filter "*.ps1" -Recurse -File
+    foreach ($file in $FilesToScan) {
+        $Content = Get-Content -Path $file.FullName -Raw
+        if ($Content -match "#\{ENVIRONMENT\}#") {
+            $Content = $Content -replace "#\{ENVIRONMENT\}#", $Environment
+            $Content | Out-File -FilePath $file.FullName -Force
+            Write-Log "Replaced environment placeholder in: $($file.Name)" "INFO"
+        }
+    }
+    
+    Write-Host ""
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    Write-Host "      INSTALLATION AND INITIAL CONFIGURATION COMPLETE!          " -ForegroundColor Green
+    Write-Host "      Base Directory: $BaseDir" -ForegroundColor Green
+    Write-Host "      Active Environment: $Environment" -ForegroundColor Green
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    Write-Host ""
 
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
+    Write-Host "FATAL ERROR: $($_.Exception.Message)" -ForegroundColor Red
 } finally {
-    # Post-Flight: Log Scanning & Email Alerting (PoshMailKit)
-    if (Test-Path $LogFile) {
-        Write-Log "Scanning $LogFile for errors in the last 5 minutes..." "INFO"
-        
-        $timeThreshold = (Get-Date).AddMinutes(-5)
-        $errorLines = @()
-        $logContents = Get-Content -Path $LogFile
-        
-        foreach ($line in $logContents) {
-            if ($line -match "^\[(.*?)\] \[(.*?)\] \[(.*?)\] (.*)") {
-                $logDateStr = $matches[1]
-                $logLevel   = $matches[2]
-                
-                $logDate = [datetime]::ParseExact($logDateStr, "yyyy-MM-dd HH:mm:ss", $null)
-                
-                if ($logDate -ge $timeThreshold -and ($logLevel -eq "ERROR" -or $logLevel -eq "CRITICAL")) {
-                    $errorLines += $line
-                }
-            }
-        }    
-        
-        if ($errorLines.Count -gt 0) {
-            Write-Log "$($errorLines.Count) error(s) found. Attempting to send email alert..." "INFO"
-            
-            try {
-                $appPassword = $GlobalConfig.EmailAppPassword 
-                $emailFrom   = $GlobalConfig.EmailFrom
-                $emailTo     = $GlobalConfig.EmailTo
-
-                if (-not $appPassword -or -not $emailFrom -or -not $emailTo) {
-                    throw "Email configuration missing from Global config."
-                }
-
-                $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
-                $credential = New-Object System.Management.Automation.PSCredential ($emailFrom, $secPassword)
-                
-                $emailBody = "The following errors were detected in the Install run:`n`n" + ($errorLines -join "`n")
-                
-                Import-Module PoshMailKit -ErrorAction Stop
-                Send-MKMailMessage -To $emailTo `
-                                   -From $emailFrom `
-                                   -Subject "Script Alert: Install Errors Detected on $Hostname" `
-                                   -Body $emailBody `
-                                   -SmtpServer "smtp.gmail.com" `
-                                   -Port 587 `
-                                   -UseSsl `
-                                   -Credential $credential
-                
-                Write-Log "Error alert email sent successfully." "INFO"
-            } catch {
-                Write-Log "Failed to send email alert: $($_.Exception.Message)" "WARNING"
-            }
-        } else {
-            Write-Log "No errors found in the last 5 minutes." "INFO"
-        }
-    } else {
-        Write-Log "Log file not found at $LogFile. Cannot scan for errors." "WARNING"
-    }
-
-    Write-Log "Install script execution completed." -End
+    Write-Log "Guided Install completed." -End
 }

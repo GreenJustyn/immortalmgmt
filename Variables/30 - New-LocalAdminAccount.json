@@ -1,5 +1,5 @@
 {
-    "AccountName": "BreakGlass",
-    "AccountDescription": "Emergency Local Administrator",
+    "AccountName": "svc_immortalmgmt",
+    "AccountDescription": "Dedicated local service account for immortalmgmt",
     "GroupName": "Administrators"
 }
