@@ -141,9 +141,9 @@ try {
     
     if (Get-Command "wsl.exe" -ErrorAction SilentlyContinue) {
         $WslInstalled = $true
-        # Check if default distro is registered
-        $wslCheck = & wsl.exe --list 2>&1
-        if ($wslCheck -notmatch "no installed distributions" -and $wslCheck -notmatch "list available distributions" -and $LASTEXITCODE -eq 0) {
+        # Check if default distro is registered and executing
+        $null = & wsl.exe true 2>$null
+        if ($LASTEXITCODE -eq 0) {
             $WslDistroInstalled = $true
         }
     }
