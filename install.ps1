@@ -135,6 +135,47 @@ try {
         Write-Log "PoshMailKit module is available." "INFO"
     }
 
+    # 3. WSL and Default Linux Distribution (Ubuntu)
+    $WslInstalled = $false
+    $WslDistroInstalled = $false
+    
+    if (Get-Command "wsl.exe" -ErrorAction SilentlyContinue) {
+        $WslInstalled = $true
+        # Check if default distro is registered
+        $wslCheck = & wsl.exe --list 2>&1
+        if ($wslCheck -notmatch "no installed distributions" -and $wslCheck -notmatch "list available distributions" -and $LASTEXITCODE -eq 0) {
+            $WslDistroInstalled = $true
+        }
+    }
+    
+    if (-not $WslDistroInstalled) {
+        Write-Log "WSL and/or default Linux distribution is missing." "WARNING"
+        $InstallWslInput = $true
+        if (-not $Unattended) {
+            $PromptWsl = Read-Host "Do you want to install/enable WSL and the default Linux distribution (Ubuntu) now? (Y/N) [Default: Y]"
+            if ([string]::IsNullOrWhiteSpace($PromptWsl) -or $PromptWsl.ToUpper().Trim() -ne "Y") {
+                $InstallWslInput = $false
+            }
+        }
+        
+        if ($InstallWslInput) {
+            Write-Log "Installing WSL and default Linux distribution (Ubuntu)..." "INFO"
+            try {
+                & wsl.exe --install --no-launch -d Ubuntu
+                Write-Log "WSL installation command triggered successfully." "INFO"
+                Write-Host "-----------------------------------------------------------------" -ForegroundColor Yellow
+                Write-Host "IMPORTANT: A system restart may be required to finalize the WSL" -ForegroundColor Yellow
+                Write-Host "installation and VM platform features before rsync runs." -ForegroundColor Yellow
+                Write-Host "-----------------------------------------------------------------" -ForegroundColor Yellow
+            } catch {
+                Write-Log "Warning: Failed to install WSL automatically: $($_.Exception.Message)" "WARNING"
+                Write-Host "Warning: Automated WSL installation failed. Please install manually using 'wsl --install'." -ForegroundColor Yellow
+            }
+        }
+    } else {
+        Write-Log "WSL and default Linux distribution are available." "INFO"
+    }
+
     # =====================================================================
     # Step 3: Global Variables Configuration (Email Details)
     # =====================================================================
