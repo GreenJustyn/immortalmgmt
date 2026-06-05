@@ -92,6 +92,10 @@ try {
             }
 
             try {
+                $ReportDir = Split-Path $Config.ReportPath -Parent
+                if (-not (Test-Path $ReportDir)) {
+                    New-Item -Path $ReportDir -ItemType Directory -Force | Out-Null
+                }
                 ConvertTo-Html -Head $HtmlHead -Body $HtmlBody | Out-File -FilePath $Config.ReportPath -Force -ErrorAction Stop
                 Write-Log "HTML Health Report successfully exported to $($Config.ReportPath)." "INFO"
             } catch {
