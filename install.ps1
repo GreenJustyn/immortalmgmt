@@ -8,6 +8,7 @@ Param(
     [string]$EmailAppPassword,
     [string]$EnvironmentName,
     [SecureString]$ServiceAccountPassword,
+    [SecureString]$RemoteSshPassword,
     [switch]$Unattended
 )
 
@@ -330,6 +331,61 @@ try {
             throw "Service account setup failed with exit code $LASTEXITCODE. The password may not meet complexity requirements or the account cannot be created."
         }
         Write-Host "Service account created and repository security hardened successfully!" -ForegroundColor Green
+    }
+    
+    # =====================================================================
+    # Step 6.5: Remote Host Credentials (for Media Manager)
+    # =====================================================================
+    Write-Host ""
+    Write-Host "[STEP 6.5] Configuring Remote Host SSH Credentials (stuff)" -ForegroundColor Green
+    
+    $stuffKeyFile = Join-Path $BaseDir "Credentials\stuff.key"
+    $stuffEncFile = Join-Path $BaseDir "Credentials\stuff.enc"
+    
+    $ConfigureSsh = $false
+    if ($RemoteSshPassword) {
+        $ConfigureSsh = $true
+        $SshPwd = $RemoteSshPassword
+    } elseif (-not $Unattended) {
+        $PromptSsh = Read-Host "Do you want to configure the Remote SSH Host password (stuff) now? (Y/N) [Default: Y]"
+        if ([string]::IsNullOrWhiteSpace($PromptSsh) -or $PromptSsh.ToUpper().Trim() -eq "Y") {
+            $ConfigureSsh = $true
+            $SshPwd = Read-Host -AsSecureString "Enter password for the remote SSH host"
+        }
+    }
+    
+    if ($ConfigureSsh) {
+        # Generate key file
+        $KeyBytes = New-Object Byte[] 32
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+        $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
+        
+        $CredFolder = Join-Path $BaseDir "Credentials"
+        if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
+        
+        $KeyBase64 | Out-File -FilePath $stuffKeyFile -Encoding utf8 -Force
+        $EncryptedText = ConvertFrom-SecureString $SshPwd -Key $KeyBytes
+        $EncryptedText | Out-File -FilePath $stuffEncFile -Encoding utf8 -Force
+        
+        # Set strict ACL permissions
+        try {
+            $Acls = @($stuffKeyFile, $stuffEncFile)
+            foreach ($file in $Acls) {
+                $Acl = Get-Acl -Path $file
+                $Acl.SetAccessRuleProtection($true, $false)
+                $Rules = @(
+                    [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                    [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                    [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                )
+                $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+            }
+            Write-Host "Remote SSH credentials configured and ACL security hardened successfully!" -ForegroundColor Green
+        } catch {
+            Write-Log "Warning: Failed to set strict ACLs on remote SSH credential files: $($_.Exception.Message)" "WARNING"
+        }
     }
     
     # =====================================================================

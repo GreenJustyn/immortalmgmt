@@ -66,6 +66,7 @@ Set-Location "C:\Scripts"
 To run the setup silently in an automated script (e.g., Packer, Terraform, or Ansible), pass the configuration variables directly and append the `-Unattended` switch:
 ```powershell
 $SecurePwd = ConvertTo-SecureString "YourServiceAccountPassword123!" -AsPlainText -Force
+$SshPwd = ConvertTo-SecureString "YourRemoteSshHostPassword123!" -AsPlainText -Force
 Set-Location "C:\Scripts"
 & '.\install.ps1' -InstallPath "C:\ImmortalMgmt" `
                   -EmailTo "alerts@justyn.space" `
@@ -73,6 +74,7 @@ Set-Location "C:\Scripts"
                   -EmailAppPassword "abcd-efgh-ijkl-mnop" `
                   -EnvironmentName "Production" `
                   -ServiceAccountPassword $SecurePwd `
+                  -RemoteSshPassword $SshPwd `
                   -Unattended
 ```
 
