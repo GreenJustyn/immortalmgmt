@@ -361,8 +361,14 @@ if [ -f "$ACCOUNT_SCRIPT" ]; then
     if [ "$EUID" -ne 0 ]; then
         echo -e "\e[33mWarning: This script must be run as root (sudo) to create local accounts. Prompting for sudo...\e[0m"
         sudo "$ACCOUNT_SCRIPT"
+        rc=$?
     else
         "$ACCOUNT_SCRIPT"
+        rc=$?
+    fi
+    if [ $rc -ne 0 ]; then
+        write_log "Service account setup failed with exit code $rc. Aborting install." "CRITICAL"
+        exit 1
     fi
     echo -e "\e[32mService account created and repository security hardened successfully!\e[0m"
 else

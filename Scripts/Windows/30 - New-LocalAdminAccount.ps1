@@ -119,27 +119,31 @@ try {
             # Idempotent Logic
             $UserExists = Get-LocalUser -Name $Config.AccountName -ErrorAction SilentlyContinue
 
-            if (-not $UserExists) {
-                Write-Log "Local account '$($Config.AccountName)' does not exist. Creating..." "INFO"
-                New-LocalUser -Name $Config.AccountName -Password $SecurePassword -Description $Config.AccountDescription -PasswordNeverExpires -ErrorAction Stop | Out-Null
+            try {
+                if (-not $UserExists) {
+                    Write-Log "Local account '$($Config.AccountName)' does not exist. Creating..." "INFO"
+                    New-LocalUser -Name $Config.AccountName -Password $SecurePassword -Description $Config.AccountDescription -PasswordNeverExpires -ErrorAction Stop | Out-Null
 
-                Write-Log "Adding '$($Config.AccountName)' to '$($Config.GroupName)' group." "INFO"
-                Add-LocalGroupMember -Group $Config.GroupName -Member $Config.AccountName -ErrorAction Stop
-
-                Write-Log "Local Administrator account created and permissioned successfully." "INFO"
-            } else {
-                Write-Log "Local account '$($Config.AccountName)' already exists. Ensuring password and group membership are enforced." "INFO"
-                Set-LocalUser -Name $Config.AccountName -Password $SecurePassword -ErrorAction Stop
-
-                $GroupMembers = Get-LocalGroupMember -Group $Config.GroupName | Select-Object -ExpandProperty Name
-                $FullAccountString = "$env:COMPUTERNAME\$($Config.AccountName)"
-
-                if ($GroupMembers -notcontains $FullAccountString -and $GroupMembers -notcontains $Config.AccountName) {
-                    Write-Log "Account is missing from '$($Config.GroupName)'. Re-adding..." "WARNING"
-                    # Upgraded to Stop so failures are caught and emailed
+                    Write-Log "Adding '$($Config.AccountName)' to '$($Config.GroupName)' group." "INFO"
                     Add-LocalGroupMember -Group $Config.GroupName -Member $Config.AccountName -ErrorAction Stop
+
+                    Write-Log "Local Administrator account created and permissioned successfully." "INFO"
+                } else {
+                    Write-Log "Local account '$($Config.AccountName)' already exists. Ensuring password and group membership are enforced." "INFO"
+                    Set-LocalUser -Name $Config.AccountName -Password $SecurePassword -ErrorAction Stop
+
+                    $GroupMembers = Get-LocalGroupMember -Group $Config.GroupName | Select-Object -ExpandProperty Name
+                    $FullAccountString = "$env:COMPUTERNAME\$($Config.AccountName)"
+
+                    if ($GroupMembers -notcontains $FullAccountString -and $GroupMembers -notcontains $Config.AccountName) {
+                        Write-Log "Account is missing from '$($Config.GroupName)'. Re-adding..." "WARNING"
+                        # Upgraded to Stop so failures are caught and emailed
+                        Add-LocalGroupMember -Group $Config.GroupName -Member $Config.AccountName -ErrorAction Stop
+                    }
+                    Write-Log "Account exists. State enforcement complete." "INFO"
                 }
-                Write-Log "Account exists. State enforcement complete." "INFO"
+            } catch [Microsoft.PowerShell.Commands.InvalidPasswordException] {
+                throw "The password provided does not meet the Windows complexity or length requirements. Please try a stronger password (must contain uppercase, lowercase, numbers, and symbols, and be at least 8-14 characters)."
             }
 
             # Hardening Permissions for the framework repository

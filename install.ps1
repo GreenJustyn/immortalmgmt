@@ -324,13 +324,12 @@ try {
     Write-Host "Executing New-LocalAdminAccount script to create 'svc_immortalmgmt' and lock down repository..." -ForegroundColor Gray
     $AccountScript = Join-Path (Join-Path $BaseDir "Scripts\Windows") "30 - New-LocalAdminAccount.ps1"
     if (Test-Path $AccountScript) {
-        try {
-            & $AccountScript
-            Write-Host "Service account created and repository security hardened successfully!" -ForegroundColor Green
-        } catch {
-            Write-Log "Warning: Interactive service account setup returned an error: $($_.Exception.Message)" "WARNING"
-            Write-Host "Warning: Service account setup returned an error. Please ensure it is run manually." -ForegroundColor Yellow
+        $LASTEXITCODE = 0
+        & $AccountScript
+        if ($LASTEXITCODE -ne 0) {
+            throw "Service account setup failed with exit code $LASTEXITCODE. The password may not meet complexity requirements or the account cannot be created."
         }
+        Write-Host "Service account created and repository security hardened successfully!" -ForegroundColor Green
     }
     
     # =====================================================================
