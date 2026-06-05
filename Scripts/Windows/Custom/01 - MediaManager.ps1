@@ -6,15 +6,8 @@ $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path (Split-Path $ScriptDir -Parent) -Parent) -Parent
 
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
-$configFilePath = Join-Path (Join-Path $BaseDir "Variables") "00 - Master.json"
-$GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
 $CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "svc_immortalmgmt.xml"
-    $GlobalConfig = Get-Content -Path $GlobalFile | ConvertFrom-Json
-    $LocalConfig = Get-Content -Path $configFilePath -Raw | ConvertFrom-Json
-    $ConfigHash = @{}
-    foreach ($prop in $GlobalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
-    $config = [PSCustomObject]$ConfigHash
+    $config = . (Join-Path $BaseDir "Functions\Get-ScriptConfig.ps1") -ScriptName "01 - MediaManager"
     Write-Log "Loaded Configuration Variables:" "INFO"
     foreach ($prop in $config.psobject.Properties) {
         if ($prop.Name -match "Password|Token") {

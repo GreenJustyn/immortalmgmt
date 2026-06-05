@@ -6,8 +6,6 @@ $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
-$configFilePath = Join-Path (Join-Path $BaseDir "Variables") "00 - Master.json"
-$GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
 
 # Logging helper
 Function Write-Log {
