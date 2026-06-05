@@ -242,30 +242,43 @@ Set-Content -Path $tempCredFile.FullName -Value $plainPassword -NoNewline
 $wslTempCredPath = ConvertTo-WslPath $tempCredFile.FullName
 
 # =====================================================================
-# Step 1.5: Validate and Provision WSL Package Dependencies
+# Step 1.5: Validate and Provision WSL Prerequisites (sshpass, pip3, mnamer)
 # =====================================================================
-Write-Log "Verifying package dependencies inside WSL..." "INFO"
+Write-Log "Verifying WSL prerequisite packages (pip3, sshpass, mnamer)..." "INFO"
 
 $wslPipCheck = wsl.exe -e sh -c "command -v pip3"
 $wslSshpassCheck = wsl.exe -e sh -c "command -v sshpass"
+$wslMnamerCheck = wsl.exe -e sh -c "command -v mnamer"
 
-if (-not $wslPipCheck -or -not $wslSshpassCheck) {
-    Write-Log "WSL is missing required system packages (pip3 or sshpass). Initiating automated package provisioning..." "WARNING"
+if (-not $wslPipCheck -or -not $wslSshpassCheck -or -not $wslMnamerCheck) {
+    Write-Log "WSL is missing one or more required prerequisites. Initiating automated provisioning..." "WARNING"
     try {
-        # Perform apt update and install required packages silently
-        $aptCmd = "cat '$wslTempCredPath' | sudo -S apt-get update -y && cat '$wslTempCredPath' | sudo -S apt-get install -y python3-pip sshpass python3"
-        Write-Log "Executing apt installation inside WSL..." "INFO"
-        $aptOutput = wsl.exe -e sh -c $aptCmd 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            throw "Apt installation failed. Output: $aptOutput"
+        # 1. First ensure system packages (pip3, sshpass, python3) are installed
+        if (-not $wslPipCheck -or -not $wslSshpassCheck) {
+            Write-Log "Installing system packages (python3-pip, sshpass) via apt-get..." "INFO"
+            $aptCmd = "cat '$wslTempCredPath' | sudo -S apt-get update -y && cat '$wslTempCredPath' | sudo -S apt-get install -y python3-pip sshpass python3"
+            $aptOutput = wsl.exe -e sh -c $aptCmd 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Apt installation failed. Output: $aptOutput"
+            }
+            Write-Log "System packages successfully installed." "INFO"
         }
-        Write-Log "WSL packages (pip3, sshpass, python3) successfully provisioned." "INFO"
+
+        # 2. Ensure mnamer is installed via pip3
+        Write-Log "Installing/Upgrading mnamer via pip3..." "INFO"
+        $pipCmd = "cat '$wslTempCredPath' | sudo -S pip3 install --upgrade mnamer --break-system-packages"
+        $pipOutput = wsl.exe -e sh -c $pipCmd 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Pip installation of mnamer failed. Output: $pipOutput"
+        }
+        Write-Log "mnamer successfully provisioned." "INFO"
+        
     } catch {
-        Write-Log "Failed to provision WSL dependencies: $($_.Exception.Message)" "CRITICAL"
+        Write-Log "Failed to provision WSL prerequisites: $($_.Exception.Message)" "CRITICAL"
         exit 1
     }
 } else {
-    Write-Log "All WSL package dependencies (pip3, sshpass) are already installed." "INFO"
+    Write-Log "All WSL prerequisites (pip3, sshpass, mnamer) are already installed and verified." "INFO"
 }
 
 # =====================================================================
@@ -273,27 +286,9 @@ if (-not $wslPipCheck -or -not $wslSshpassCheck) {
 # =====================================================================
 try {
     # ---------------------------------------------------------------------
-    # Step 2: Ensure mnamer is Installed & Updated
+    # Step 2: Starting Single-Pass mnamer Run
     # ---------------------------------------------------------------------
     Write-Log "Starting Single-Pass mnamer Run (Default Distro)..."
-    Write-Log "Checking mnamer installation and updates..."
-
-    $updateCmd = "cat '$wslTempCredPath' | sudo -S pip3 install --upgrade mnamer --break-system-packages"
-    try {
-        $updateOutput = wsl.exe -e sh -c $updateCmd 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            if ($updateOutput -match "Requirement already satisfied") {
-                Write-Log "mnamer is already up to date."
-            } else {
-                Write-Log "mnamer updated successfully."
-            }
-        } else {
-            Write-Log "Failed to update mnamer. Error output: $updateOutput" "WARNING"
-        }
-    }
-    catch {
-        Write-Log "Error executing update command: $($_.Exception.Message)" "CRITICAL"
-    }
 
     # ---------------------------------------------------------------------
     # Step 3: Main Processing (Single Pass)
