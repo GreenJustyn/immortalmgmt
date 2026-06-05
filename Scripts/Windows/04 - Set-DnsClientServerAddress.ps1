@@ -7,7 +7,6 @@ $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
 $ConfigFile  = Join-Path (Join-Path $BaseDir "Variables") "$ScriptName.json"
 $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
-$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "credential.xml"
 $Environment = "#{ENVIRONMENT}#"
 
 Function Write-Log {
@@ -56,14 +55,6 @@ try {
     }
 
     try {
-        if (-not (Test-Path $CredFile)) { 
-                throw "FATAL: Credential XML missing at $CredFile." 
-            }
-            try { 
-                $SvcCreds = Import-Clixml -Path $CredFile 
-            } catch { 
-                throw "ERROR: Credential import failed. Ensure the script is run by the user who created the XML." 
-            }
 
             # Idempotent Logic
             $Interface = Get-NetAdapter -Name $Config.InterfaceAlias -ErrorAction SilentlyContinue

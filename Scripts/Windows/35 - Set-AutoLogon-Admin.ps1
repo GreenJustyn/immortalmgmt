@@ -49,28 +49,124 @@ try {
     $scriptExitCode = 0
 
     try {
-        # Credential Check and Secure Extraction
-            if (-not (Test-Path $CredFile)) { 
-                throw "FATAL: Credential XML missing at $CredFile." 
+        # Load password from secure Credentials/credential.key and credential.enc if available, else migrate legacy credential.xml
+        $CredFolder       = Join-Path $BaseDir "Credentials"
+        $symKeyFile       = Join-Path $CredFolder "credential.key"
+        $symEncFile       = Join-Path $CredFolder "credential.enc"
+
+        $DecryptionSuccess = $false
+
+        if ((Test-Path $symKeyFile) -and (Test-Path $symEncFile)) {
+            try {
+                $Key = [Convert]::FromBase64String((Get-Content -Path $symKeyFile -Raw).Trim())
+                $EncryptedText = (Get-Content -Path $symEncFile -Raw).Trim()
+                $SecurePassword = ConvertTo-SecureString $EncryptedText -Key $Key
+                $DecryptionSuccess = $true
+            } catch {
+                Write-Log "Failed to decrypt symmetric credentials: $($_.Exception.Message)" "WARNING"
             }
+        }
 
-            try { 
-                $SvcCreds = Import-Clixml -Path $CredFile 
-
-                if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
-                    $SecurePassword = $SvcCreds.Password
-                } else {
-                    $SecurePassword = $SvcCreds # Assume it is the SecureString itself
+        if (-not $DecryptionSuccess) {
+            if (Test-Path $CredFile) {
+                try {
+                    $SvcCreds = Import-Clixml -Path $CredFile
+                    if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
+                        $SecurePassword = $SvcCreds.Password
+                    } else {
+                        $SecurePassword = $SvcCreds # Assume it is the SecureString itself
+                    }
+                    
+                    # Migrate to symmetric files on the fly
+                    $KeyBytes = New-Object Byte[] 32
+                    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+                    $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
+                    $KeyBase64 | Out-File -FilePath $symKeyFile -Encoding utf8 -Force
+                    
+                    $EncryptedText = ConvertFrom-SecureString $SecurePassword -Key $KeyBytes
+                    $EncryptedText | Out-File -FilePath $symEncFile -Encoding utf8 -Force
+                    
+                    # Set strict ACL permissions
+                    try {
+                        $Acls = @($symKeyFile, $symEncFile)
+                        foreach ($file in $Acls) {
+                            $Acl = Get-Acl -Path $file
+                            $Acl.SetAccessRuleProtection($true, $false)
+                            $Rules = @(
+                                [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                                [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                                [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                            )
+                            $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                            foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                            Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+                        }
+                    } catch {
+                        Write-Log "Warning: Failed to set strict ACLs on symmetric credential files: $($_.Exception.Message)" "WARNING"
+                    }
+                    
+                    $DecryptionSuccess = $true
+                    Write-Log "Successfully migrated legacy DPAPI credential.xml to symmetric key encryption on-the-fly." "INFO"
+                } catch {
+                    Write-Log "Failed to decrypt legacy XML credential file: $($_.Exception.Message)" "WARNING"
                 }
-
-                $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePassword)
-                $PlainPass = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-            } catch { 
-                throw "ERROR: Credential import failed. Ensure script is run by the user who created the XML. Details: $($_.Exception.Message)" 
-            } finally {
-                # Securely clean up the unmanaged memory used for the string conversion
-                if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
             }
+        }
+
+        if (-not $DecryptionSuccess) {
+            if ([Environment]::UserInteractive) {
+                Write-Log "Symmetric credential files missing or invalid. Prompting to create them..." "WARNING"
+                Write-Host ""
+                Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+                Write-Host "CREATING LOCAL ADMINISTRATOR CREDENTIALS (CREDENTIAL)" -ForegroundColor Yellow
+                Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+                $PasswordInput = Read-Host -AsSecureString "Enter password for autologon admin user"
+                
+                # Generate key file
+                $KeyBytes = New-Object Byte[] 32
+                [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+                $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
+                if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
+                $KeyBase64 | Out-File -FilePath $symKeyFile -Encoding utf8 -Force
+                
+                # Encrypt password
+                $EncryptedText = ConvertFrom-SecureString $PasswordInput -Key $KeyBytes
+                $EncryptedText | Out-File -FilePath $symEncFile -Encoding utf8 -Force
+                
+                $SecurePassword = $PasswordInput
+                $DecryptionSuccess = $true
+                
+                # Set ACLs
+                try {
+                    $Acls = @($symKeyFile, $symEncFile)
+                    foreach ($file in $Acls) {
+                        $Acl = Get-Acl -Path $file
+                        $Acl.SetAccessRuleProtection($true, $false)
+                        $Rules = @(
+                            [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                            [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                            [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                        )
+                        $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                        foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                        Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+                    }
+                } catch {
+                    Write-Log "Warning: Failed to set strict ACLs on symmetric credential files: $($_.Exception.Message)" "WARNING"
+                }
+                
+                Write-Log "Successfully created symmetric credentials." "INFO"
+            } else {
+                throw "FATAL: Symmetric credential files missing or invalid and session is non-interactive."
+            }
+        }
+
+        try {
+            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePassword)
+            $PlainPass = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+        } finally {
+            if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
+        }
 
             # Idempotent Logic
             $WinlogonPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
