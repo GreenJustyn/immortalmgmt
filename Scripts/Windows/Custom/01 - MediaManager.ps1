@@ -88,16 +88,42 @@ function ConvertTo-WslPath {
 Rotate-Log
 Write-Log "#################### --------- Start of script -- $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') --------- ####################"
 
+# 1. Validate that WSL is enabled (and command exists)
 if (-not (Get-Command "wsl.exe" -ErrorAction SilentlyContinue)) {
-    Write-Log "WSL is not installed on this system. Exiting." "CRITICAL"
-    exit
+    Write-Log "WSL is not enabled on this system. Enabling WSL and installing Ubuntu..." "WARNING"
+    try {
+        # Enable WSL and install Ubuntu (requires elevation)
+        $process = Start-Process -FilePath "wsl.exe" -ArgumentList "--install", "--no-launch", "-d", "Ubuntu" -NoNewWindow -PassThru -Wait
+        if ($process.ExitCode -ne 0) {
+            # Fallback to DISM if wsl --install is not supported/fails
+            dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart | Out-Null
+            dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart | Out-Null
+            throw "WSL feature enabled via DISM, but wsl.exe was not found. A system reboot is required."
+        }
+        Write-Log "WSL has been enabled and Ubuntu installation triggered. A reboot may be required." "INFO"
+    } catch {
+        Write-Log "Failed to enable WSL automatically: $($_.Exception.Message)" "CRITICAL"
+        exit 1
+    }
 }
 
-# Verify at least one WSL distribution is registered/installed and functional
+# 2. Validate there is a default Linux distro and it is functional
 $null = & wsl.exe true 2>$null
 if ($LASTEXITCODE -ne 0) {
-    Write-Log "WSL is enabled, but no default Linux distribution is installed or functional. Please run 'wsl --install -d Ubuntu' in an elevated shell." "CRITICAL"
-    exit
+    Write-Log "WSL is enabled, but no default Linux distribution (Ubuntu) is installed or functional. Triggering installation..." "WARNING"
+    try {
+        # Try to install Ubuntu distro
+        $process = Start-Process -FilePath "wsl.exe" -ArgumentList "--install", "-d", "Ubuntu", "--no-launch" -NoNewWindow -PassThru -Wait
+        # Check if successful
+        $null = & wsl.exe true 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Ubuntu installation completed but WSL is still not executing commands. A reboot is likely required."
+        }
+        Write-Log "Ubuntu Linux distribution has been successfully installed and registered." "INFO"
+    } catch {
+        Write-Log "Failed to install Ubuntu distribution: $($_.Exception.Message)" "CRITICAL"
+        exit 1
+    }
 }
 
 # Load password from secure Credentials/stuff.key and stuff.enc if available, else migrate legacy stuff.xml
@@ -409,6 +435,16 @@ try {
     # 1. Wipe the temporary plain-text credential file immediately
     if (Test-Path $tempCredFile.FullName) {
         Remove-Item -Path $tempCredFile.FullName -Force -ErrorAction SilentlyContinue
+    }
+    
+    # 2. Reset / Shutdown WSL instances to release locked files and process handles
+    if (Get-Command "wsl.exe" -ErrorAction SilentlyContinue) {
+        Write-Log "Shutting down WSL instances to release system handles..." "INFO"
+        try {
+            & wsl.exe --shutdown
+        } catch {
+            Write-Log "Warning: Failed to execute wsl --shutdown: $($_.Exception.Message)" "WARNING"
+        }
     }
     
     Write-Log "Replication runs complete. Proceeding to alert check."
