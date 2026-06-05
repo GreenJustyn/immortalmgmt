@@ -49,148 +49,151 @@ try {
     $scriptExitCode = 0
 
     try {
-        # Load password from secure Credentials/credential.key and credential.enc if available, else migrate legacy credential.xml
-        $CredFolder       = Join-Path $BaseDir "Credentials"
-        $symKeyFile       = Join-Path $CredFolder "credential.key"
-        $symEncFile       = Join-Path $CredFolder "credential.enc"
+        # Idempotent Logic
+        $WinlogonPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
 
-        $DecryptionSuccess = $false
+        $CurrentAutoAdmin = (Get-ItemProperty -Path $WinlogonPath -Name "AutoAdminLogon" -ErrorAction SilentlyContinue).AutoAdminLogon
+        $TargetVal = if ($Config.EnableAutoLogon) { "1" } else { "0" }
 
-        if ((Test-Path $symKeyFile) -and (Test-Path $symEncFile)) {
-            try {
-                $Key = [Convert]::FromBase64String((Get-Content -Path $symKeyFile -Raw).Trim())
-                $EncryptedText = (Get-Content -Path $symEncFile -Raw).Trim()
-                $SecurePassword = ConvertTo-SecureString $EncryptedText -Key $Key
-                $DecryptionSuccess = $true
-            } catch {
-                Write-Log "Failed to decrypt symmetric credentials: $($_.Exception.Message)" "WARNING"
-            }
-        }
+        if ($CurrentAutoAdmin -ne $TargetVal) {
+            Write-Log "AutoLogon state drift. Enforcing EnableAutoLogon: $($Config.EnableAutoLogon)" "INFO"
 
-        if (-not $DecryptionSuccess) {
-            if (Test-Path $CredFile) {
-                try {
-                    $SvcCreds = Import-Clixml -Path $CredFile
-                    if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
-                        $SecurePassword = $SvcCreds.Password
-                    } else {
-                        $SecurePassword = $SvcCreds # Assume it is the SecureString itself
-                    }
-                    
-                    # Migrate to symmetric files on the fly
-                    $KeyBytes = New-Object Byte[] 32
-                    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
-                    $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
-                    $KeyBase64 | Out-File -FilePath $symKeyFile -Encoding utf8 -Force
-                    
-                    $EncryptedText = ConvertFrom-SecureString $SecurePassword -Key $KeyBytes
-                    $EncryptedText | Out-File -FilePath $symEncFile -Encoding utf8 -Force
-                    
-                    # Set strict ACL permissions
+            # If enabling AutoLogon, we MUST load and decrypt the password
+            if ($Config.EnableAutoLogon) {
+                # Load password from secure Credentials/credential.key and credential.enc if available, else migrate legacy credential.xml
+                $CredFolder       = Join-Path $BaseDir "Credentials"
+                $symKeyFile       = Join-Path $CredFolder "credential.key"
+                $symEncFile       = Join-Path $CredFolder "credential.enc"
+
+                $DecryptionSuccess = $false
+
+                if ((Test-Path $symKeyFile) -and (Test-Path $symEncFile)) {
                     try {
-                        $Acls = @($symKeyFile, $symEncFile)
-                        foreach ($file in $Acls) {
-                            $Acl = Get-Acl -Path $file
-                            $Acl.SetAccessRuleProtection($true, $false)
-                            $Rules = @(
-                                [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
-                                [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
-                                [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
-                            )
-                            $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
-                            foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
-                            Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
-                        }
+                        $Key = [Convert]::FromBase64String((Get-Content -Path $symKeyFile -Raw).Trim())
+                        $EncryptedText = (Get-Content -Path $symEncFile -Raw).Trim()
+                        $SecurePassword = ConvertTo-SecureString $EncryptedText -Key $Key
+                        $DecryptionSuccess = $true
                     } catch {
-                        Write-Log "Warning: Failed to set strict ACLs on symmetric credential files: $($_.Exception.Message)" "WARNING"
+                        Write-Log "Failed to decrypt symmetric credentials: $($_.Exception.Message)" "WARNING"
                     }
-                    
-                    $DecryptionSuccess = $true
-                    Write-Log "Successfully migrated legacy DPAPI credential.xml to symmetric key encryption on-the-fly." "INFO"
-                } catch {
-                    Write-Log "Failed to decrypt legacy XML credential file: $($_.Exception.Message)" "WARNING"
                 }
-            }
-        }
 
-        if (-not $DecryptionSuccess) {
-            if ([Environment]::UserInteractive) {
-                Write-Log "Symmetric credential files missing or invalid. Prompting to create them..." "WARNING"
-                Write-Host ""
-                Write-Host "--------------------------------------------------" -ForegroundColor Yellow
-                Write-Host "CREATING LOCAL ADMINISTRATOR CREDENTIALS (CREDENTIAL)" -ForegroundColor Yellow
-                Write-Host "--------------------------------------------------" -ForegroundColor Yellow
-                $PasswordInput = Read-Host -AsSecureString "Enter password for autologon admin user"
-                
-                # Generate key file
-                $KeyBytes = New-Object Byte[] 32
-                [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
-                $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
-                if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
-                $KeyBase64 | Out-File -FilePath $symKeyFile -Encoding utf8 -Force
-                
-                # Encrypt password
-                $EncryptedText = ConvertFrom-SecureString $PasswordInput -Key $KeyBytes
-                $EncryptedText | Out-File -FilePath $symEncFile -Encoding utf8 -Force
-                
-                $SecurePassword = $PasswordInput
-                $DecryptionSuccess = $true
-                
-                # Set ACLs
+                if (-not $DecryptionSuccess) {
+                    if (Test-Path $CredFile) {
+                        try {
+                            $SvcCreds = Import-Clixml -Path $CredFile
+                            if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
+                                $SecurePassword = $SvcCreds.Password
+                            } else {
+                                $SecurePassword = $SvcCreds # Assume it is the SecureString itself
+                            }
+                            
+                            # Migrate to symmetric files on the fly
+                            $KeyBytes = New-Object Byte[] 32
+                            [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+                            $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
+                            $KeyBase64 | Out-File -FilePath $symKeyFile -Encoding utf8 -Force
+                            
+                            $EncryptedText = ConvertFrom-SecureString $SecurePassword -Key $KeyBytes
+                            $EncryptedText | Out-File -FilePath $symEncFile -Encoding utf8 -Force
+                            
+                            # Set strict ACL permissions
+                            try {
+                                $Acls = @($symKeyFile, $symEncFile)
+                                foreach ($file in $Acls) {
+                                    $Acl = Get-Acl -Path $file
+                                    $Acl.SetAccessRuleProtection($true, $false)
+                                    $Rules = @(
+                                        [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                                        [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                                        [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                                    )
+                                    $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                                    foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                                    Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+                                }
+                            } catch {
+                                Write-Log "Warning: Failed to set strict ACLs on symmetric credential files: $($_.Exception.Message)" "WARNING"
+                            }
+                            
+                            $DecryptionSuccess = $true
+                            Write-Log "Successfully migrated legacy DPAPI credential.xml to symmetric key encryption on-the-fly." "INFO"
+                        } catch {
+                            Write-Log "Failed to decrypt legacy XML credential file: $($_.Exception.Message)" "WARNING"
+                        }
+                    }
+                }
+
+                if (-not $DecryptionSuccess) {
+                    if ([Environment]::UserInteractive) {
+                        Write-Log "Symmetric credential files missing or invalid. Prompting to create them..." "WARNING"
+                        Write-Host ""
+                        Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+                        Write-Host "CREATING LOCAL ADMINISTRATOR CREDENTIALS (CREDENTIAL)" -ForegroundColor Yellow
+                        Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+                        $PasswordInput = Read-Host -AsSecureString "Enter password for autologon admin user"
+                        
+                        # Generate key file
+                        $KeyBytes = New-Object Byte[] 32
+                        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+                        $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
+                        if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
+                        $KeyBase64 | Out-File -FilePath $symKeyFile -Encoding utf8 -Force
+                        
+                        # Encrypt password
+                        $EncryptedText = ConvertFrom-SecureString $PasswordInput -Key $KeyBytes
+                        $EncryptedText | Out-File -FilePath $symEncFile -Encoding utf8 -Force
+                        
+                        $SecurePassword = $PasswordInput
+                        $DecryptionSuccess = $true
+                        
+                        # Set ACLs
+                        try {
+                            $Acls = @($symKeyFile, $symEncFile)
+                            foreach ($file in $Acls) {
+                                $Acl = Get-Acl -Path $file
+                                $Acl.SetAccessRuleProtection($true, $false)
+                                $Rules = @(
+                                    [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                                    [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                                    [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                                )
+                                $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                                foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                                Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+                            }
+                        } catch {
+                            Write-Log "Warning: Failed to set strict ACLs on symmetric credential files: $($_.Exception.Message)" "WARNING"
+                        }
+                        
+                        Write-Log "Successfully created symmetric credentials." "INFO"
+                    } else {
+                        throw "FATAL: Symmetric credential files missing or invalid and session is non-interactive."
+                    }
+                }
+
                 try {
-                    $Acls = @($symKeyFile, $symEncFile)
-                    foreach ($file in $Acls) {
-                        $Acl = Get-Acl -Path $file
-                        $Acl.SetAccessRuleProtection($true, $false)
-                        $Rules = @(
-                            [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
-                            [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
-                            [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
-                        )
-                        $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
-                        foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
-                        Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
-                    }
-                } catch {
-                    Write-Log "Warning: Failed to set strict ACLs on symmetric credential files: $($_.Exception.Message)" "WARNING"
+                    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePassword)
+                    $PlainPass = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+                } finally {
+                    if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
                 }
-                
-                Write-Log "Successfully created symmetric credentials." "INFO"
-            } else {
-                throw "FATAL: Symmetric credential files missing or invalid and session is non-interactive."
             }
-        }
 
-        try {
-            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePassword)
-            $PlainPass = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-        } finally {
-            if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
-        }
+            Set-ItemProperty -Path $WinlogonPath -Name "AutoAdminLogon" -Value $TargetVal -Force -ErrorAction Stop
+            Set-ItemProperty -Path $WinlogonPath -Name "DefaultUserName" -Value $Config.TargetUser -Force -ErrorAction Stop
+            Set-ItemProperty -Path $WinlogonPath -Name "DefaultDomainName" -Value $Config.Domain -Force -ErrorAction Stop
 
-            # Idempotent Logic
-            $WinlogonPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
-
-            $CurrentAutoAdmin = (Get-ItemProperty -Path $WinlogonPath -Name "AutoAdminLogon" -ErrorAction SilentlyContinue).AutoAdminLogon
-            $TargetVal = if ($Config.EnableAutoLogon) { "1" } else { "0" }
-
-            if ($CurrentAutoAdmin -ne $TargetVal) {
-                Write-Log "AutoLogon state drift. Enforcing EnableAutoLogon: $($Config.EnableAutoLogon)" "INFO"
-
-                Set-ItemProperty -Path $WinlogonPath -Name "AutoAdminLogon" -Value $TargetVal -Force -ErrorAction Stop
-                Set-ItemProperty -Path $WinlogonPath -Name "DefaultUserName" -Value $Config.TargetUser -Force -ErrorAction Stop
-                Set-ItemProperty -Path $WinlogonPath -Name "DefaultDomainName" -Value $Config.Domain -Force -ErrorAction Stop
-
-                if ($Config.EnableAutoLogon) {
-                    Set-ItemProperty -Path $WinlogonPath -Name "DefaultPassword" -Value $PlainPass -Force -ErrorAction Stop
-                    Write-Log "AutoLogon configured securely." "INFO"
-                } else {
-                    Remove-ItemProperty -Path $WinlogonPath -Name "DefaultPassword" -ErrorAction SilentlyContinue
-                    Write-Log "AutoLogon disabled and credentials scrubbed." "INFO"
-                }
+            if ($Config.EnableAutoLogon) {
+                Set-ItemProperty -Path $WinlogonPath -Name "DefaultPassword" -Value $PlainPass -Force -ErrorAction Stop
+                Write-Log "AutoLogon configured securely." "INFO"
             } else {
-                Write-Log "AutoLogon configuration is already correct. No action taken." "INFO"
+                Remove-ItemProperty -Path $WinlogonPath -Name "DefaultPassword" -ErrorAction SilentlyContinue
+                Write-Log "AutoLogon disabled and credentials scrubbed." "INFO"
             }
+        } else {
+            Write-Log "AutoLogon configuration is already correct. No action taken." "INFO"
+        }
     } catch {
         Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
         $scriptExitCode = 1
