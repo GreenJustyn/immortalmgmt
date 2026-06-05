@@ -81,23 +81,8 @@ Set-Location "C:\Scripts"
 
 ---
 
-### 🔐 Step 5: Secure Local Credentials for Automation
-The automation framework utilizes encrypted XML credentials bound specifically to the user executing the tasks to prevent plain-text credential leaks.
-
-Generate your GitHub Sync token and the local administrative credentials:
-
-```powershell
-# 1. Create the local Administrator credentials (for automated task registration)
-Get-Credential -UserName "Administrator" -Message "Enter local Administrator password" | Export-Clixml -Path "C:\Scripts\Credentials\bootstrap.xml"
-
-# 2. Create the headless Git synchronization credentials (for pulling updates silently)
-Get-Credential -UserName "git" -Message "Paste your GitHub Personal Access Token as the password" | Export-Clixml -Path "C:\Scripts\Credentials\git-credential.xml"
-```
-
----
-
-### ⚡ Step 6: Execute the Bootstrap Engine
-With the configurations and identities staged, run the core bootstrapping engine. This script will discover operational automation scripts inside the `Scripts\Windows` directory and permanently register them inside the Windows Task Scheduler.
+### ⚡ Step 5: (Optional) Manual Bootstrap Execution
+If you chose not to run the bootstrapping engine automatically during Step 4, or want to re-register tasks manually at a later date, you can run the bootstrap script directly. It will discover operational scripts and register them in the Windows Task Scheduler (interactively prompting for credentials if they are missing or invalid):
 
 ```powershell
 Set-Location "C:\Scripts\Scripts\Windows"

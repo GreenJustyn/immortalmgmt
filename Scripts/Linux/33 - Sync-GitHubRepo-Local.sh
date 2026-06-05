@@ -116,8 +116,6 @@ fi
 REPO_URL=$(python3 -c "import json, sys; print(json.loads(sys.argv[1]).get('RepoUrl', ''))" "$CONFIG_JSON")
 BRANCH=$(python3 -c "import json, sys; print(json.loads(sys.argv[1]).get('Branch', 'main'))" "$CONFIG_JSON")
 LOCAL_REPO_PATH=$(python3 -c "import json, sys; print(json.loads(sys.argv[1]).get('LocalRepoPath', ''))" "$CONFIG_JSON")
-GIT_TOKEN=$(python3 -c "import json, sys; print(json.loads(sys.argv[1]).get('Token', ''))" "$CONFIG_JSON")
-
 # Translate path if it looks like Windows
 if [[ "$LOCAL_REPO_PATH" == *":"* ]]; then
     REPO_NAME=$(basename "$LOCAL_REPO_PATH")
@@ -135,14 +133,7 @@ if [ -z "$REPO_URL" ] || [ -z "$LOCAL_REPO_PATH" ]; then
     exit 1
 fi
 
-# Handle Token for Auth
 AUTH_URL="$REPO_URL"
-if [ -n "$GIT_TOKEN" ]; then
-    AUTH_URL=$(echo "$REPO_URL" | sed "s|https://|https://$GIT_TOKEN@|")
-    write_log "Using provided token for authentication." "INFO"
-else
-    write_log "WARNING: No Git Token provided in config. Attempting public access or relying on cached credentials." "WARNING"
-fi
 
 # Git Environment Check
 if ! command -v git &> /dev/null; then
