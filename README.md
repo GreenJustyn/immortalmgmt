@@ -50,8 +50,18 @@ This dynamic loader automatically scans the server for its `_NodeIdentity.json` 
 
 ## 🚀 Operational Quickstart
 
-1. For deploying this engine onto a fresh server fleet, read the fully documented setup steps inside [BOOTSTRAP.md](BOOTSTRAP.md).
-2. To perform routine compliance scans across your environment:
-   ```powershell
-   C:\Scripts\Scripts\Windows\39 - Test-Infrastructure-Compliance.ps1
-   ```
+### Option A: One-Line Guided Setup (Recommended)
+To bootstrap and configure a fresh target Windows Server immediately from GitHub (without manually cloning or configuring directories first), open an elevated PowerShell prompt and execute:
+
+```powershell
+$temp = Join-Path $env:TEMP "immortalmgmt-setup"; New-Item -ItemType Directory -Force $temp | Out-Null; Invoke-WebRequest -Uri "https://github.com/GreenJustyn/immortalmgmt/archive/refs/heads/main.zip" -OutFile "$temp\repo.zip"; Expand-Archive -Path "$temp\repo.zip" -DestinationPath $temp -Force; & "$temp\immortalmgmt-main\install.ps1"
+```
+
+### Option B: Step-by-Step Manual Deployment
+For manual deployment, customized node identities, or headless domain setups, follow the step-by-step instructions detailed in [BOOTSTRAP.md](BOOTSTRAP.md).
+
+---
+To perform routine compliance scans across your environment:
+```powershell
+C:\Scripts\Scripts\Windows\39 - Test-Infrastructure-Compliance.ps1
+```
