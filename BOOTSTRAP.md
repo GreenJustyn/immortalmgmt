@@ -54,11 +54,26 @@ git clone https://github.com/GreenJustyn/immortalmgmt.git C:\Scripts
 ---
 
 ### 🖥️ Step 4: Initialize Host Variables (OOB Configuration)
-Before registering automation tasks, initialize host-specific variables automatically:
+Before registering automation tasks, initialize host-specific variables automatically. You can do this interactively or fully unattended:
 
+#### Option A: Guided Interactive Install
 ```powershell
 Set-Location "C:\Scripts"
 & '.\install.ps1'
+```
+
+#### Option B: Unattended Silent Install (Recommended for automation)
+To run the setup silently in an automated script (e.g., Packer, Terraform, or Ansible), pass the configuration variables directly and append the `-Unattended` switch:
+```powershell
+$SecurePwd = ConvertTo-SecureString "YourServiceAccountPassword123!" -AsPlainText -Force
+Set-Location "C:\Scripts"
+& '.\install.ps1' -InstallPath "C:\ImmortalMgmt" `
+                  -EmailTo "alerts@justyn.space" `
+                  -EmailFrom "alerts@justyn.space" `
+                  -EmailAppPassword "abcd-efgh-ijkl-mnop" `
+                  -EnvironmentName "Production" `
+                  -ServiceAccountPassword $SecurePwd `
+                  -Unattended
 ```
 
 ---

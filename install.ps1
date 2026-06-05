@@ -1,5 +1,16 @@
 # Requires -RunAsAdministrator
 
+[CmdletBinding()]
+Param(
+    [string]$InstallPath,
+    [string]$EmailTo,
+    [string]$EmailFrom,
+    [string]$EmailAppPassword,
+    [string]$EnvironmentName,
+    [SecureString]$ServiceAccountPassword,
+    [switch]$Unattended
+)
+
 $ScriptName  = "install"
 $ScriptDir   = $PSScriptRoot
 $BaseDir     = $ScriptDir
@@ -48,8 +59,17 @@ try {
     # =====================================================================
     Write-Host "[STEP 1] Installation Path Configuration" -ForegroundColor Green
     $DefaultPath = "C:\ImmortalMgmt"
-    $UserInputPath = Read-Host "Enter target installation directory [Default: $DefaultPath]"
-    $InstallPath = if ([string]::IsNullOrWhiteSpace($UserInputPath)) { $DefaultPath } else { $UserInputPath }
+    if ($Unattended) {
+        $InstallPath = if ($InstallPath) { $InstallPath } else { $DefaultPath }
+    } else {
+        if ($InstallPath) {
+            $UserInputPath = Read-Host "Enter target installation directory [Default: $InstallPath]"
+            $InstallPath = if ([string]::IsNullOrWhiteSpace($UserInputPath)) { $InstallPath } else { $UserInputPath }
+        } else {
+            $UserInputPath = Read-Host "Enter target installation directory [Default: $DefaultPath]"
+            $InstallPath = if ([string]::IsNullOrWhiteSpace($UserInputPath)) { $DefaultPath } else { $UserInputPath }
+        }
+    }
 
     Write-Log "Target installation path resolved to: $InstallPath" "INFO"
 
@@ -120,15 +140,15 @@ try {
     Write-Host ""
     Write-Host "[STEP 3] Global Configuration Setup (Email Alerting)" -ForegroundColor Green
     
-    $EmailTo = ""
-    $EmailFrom = ""
-    $EmailAppPassword = ""
-    
-    $ConfigureEmail = Read-Host "Do you want to configure email alerts now? (Y/N) [Default: Y]"
-    if ([string]::IsNullOrWhiteSpace($ConfigureEmail) -or $ConfigureEmail.ToUpper().Trim() -eq "Y") {
-        $EmailTo = Read-Host "Enter alert recipient email address (EmailTo)"
-        $EmailFrom = Read-Host "Enter alert sender email address (EmailFrom)"
-        $EmailAppPassword = Read-Host "Enter App-Specific Gmail Password (EmailAppPassword)"
+    if (-not $Unattended) {
+        if ([string]::IsNullOrWhiteSpace($EmailTo) -and [string]::IsNullOrWhiteSpace($EmailFrom)) {
+            $ConfigureEmail = Read-Host "Do you want to configure email alerts now? (Y/N) [Default: Y]"
+            if ([string]::IsNullOrWhiteSpace($ConfigureEmail) -or $ConfigureEmail.ToUpper().Trim() -eq "Y") {
+                $EmailTo = Read-Host "Enter alert recipient email address (EmailTo)"
+                $EmailFrom = Read-Host "Enter alert sender email address (EmailFrom)"
+                $EmailAppPassword = Read-Host "Enter App-Specific Gmail Password (EmailAppPassword)"
+            }
+        }
     }
 
     # Load and update Global configuration
@@ -218,20 +238,26 @@ try {
     Write-Host ""
     Write-Host "[STEP 5] Environment Variable Validation" -ForegroundColor Green
     
-    # Display Environment Choice
-    Write-Host "Select framework environment to configure:" -ForegroundColor Gray
-    Write-Host "  1) Production"
-    Write-Host "  2) Staging"
-    Write-Host "  3) Development"
-    Write-Host "  4) Custom"
-    
-    $EnvChoice = Read-Host "Enter choice (1-4) [Default: 1]"
-    $ResolvedEnv = switch ($EnvChoice) {
-        "1" { "Production" }
-        "2" { "Staging" }
-        "3" { "Development" }
-        "4" { Read-Host "Enter custom environment name" }
-        default { "Production" }
+    if ($EnvironmentName) {
+        $ResolvedEnv = $EnvironmentName
+    } elseif ($Unattended) {
+        $ResolvedEnv = "Production"
+    } else {
+        # Display Environment Choice
+        Write-Host "Select framework environment to configure:" -ForegroundColor Gray
+        Write-Host "  1) Production"
+        Write-Host "  2) Staging"
+        Write-Host "  3) Development"
+        Write-Host "  4) Custom"
+        
+        $EnvChoice = Read-Host "Enter choice (1-4) [Default: 1]"
+        $ResolvedEnv = switch ($EnvChoice) {
+            "1" { "Production" }
+            "2" { "Staging" }
+            "3" { "Development" }
+            "4" { Read-Host "Enter custom environment name" }
+            default { "Production" }
+        }
     }
     
     if ([string]::IsNullOrWhiteSpace($ResolvedEnv)) { $ResolvedEnv = "Production" }
@@ -255,8 +281,18 @@ try {
     # =====================================================================
     Write-Host ""
     Write-Host "[STEP 6] Provisioning Service Account & Hardening Security" -ForegroundColor Green
-    Write-Host "Executing New-LocalAdminAccount script to create 'svc_immortalmgmt' and lock down repository..." -ForegroundColor Gray
     
+    # Pre-stage the credential file if ServiceAccountPassword parameter is provided
+    if ($ServiceAccountPassword) {
+        $CredFolder = Join-Path $BaseDir "Credentials"
+        $CredFile = Join-Path $CredFolder "svc_immortalmgmt.xml"
+        $CredObject = New-Object System.Management.Automation.PSCredential("svc_immortalmgmt", $ServiceAccountPassword)
+        if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
+        $CredObject | Export-Clixml -Path $CredFile -Force
+        Write-Log "Pre-staged service account credentials from ServiceAccountPassword parameter." "INFO"
+    }
+
+    Write-Host "Executing New-LocalAdminAccount script to create 'svc_immortalmgmt' and lock down repository..." -ForegroundColor Gray
     $AccountScript = Join-Path (Join-Path $BaseDir "Scripts\Windows") "30 - New-LocalAdminAccount.ps1"
     if (Test-Path $AccountScript) {
         try {
@@ -273,8 +309,16 @@ try {
     # =====================================================================
     Write-Host ""
     Write-Host "[STEP 7] Registering Scheduled Tasks (Bootstrapping)" -ForegroundColor Green
-    $RunBootstrap = Read-Host "Do you want to run the bootstrap script to register scheduled tasks now? (Y/N) [Default: Y]"
-    if ([string]::IsNullOrWhiteSpace($RunBootstrap) -or $RunBootstrap.ToUpper().Trim() -eq "Y") {
+    
+    $RunBoot = $true
+    if (-not $Unattended) {
+        $RunBootstrap = Read-Host "Do you want to run the bootstrap script to register scheduled tasks now? (Y/N) [Default: Y]"
+        if ([string]::IsNullOrWhiteSpace($RunBootstrap) -or $RunBootstrap.ToUpper().Trim() -ne "Y") {
+            $RunBoot = $false
+        }
+    }
+    
+    if ($RunBoot) {
         $BootstrapScript = Join-Path (Join-Path $BaseDir "Scripts\Windows") "000 - Bootstrap Script.ps1"
         if (Test-Path $BootstrapScript) {
             try {

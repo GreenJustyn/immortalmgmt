@@ -5,6 +5,30 @@ SCRIPT_NAME="install"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 BASE_DIR="$SCRIPT_DIR"
 
+# Initialize parameters
+INSTALL_PATH=""
+EMAIL_TO=""
+EMAIL_FROM=""
+EMAIL_APP_PASSWORD=""
+ENVIRONMENT_NAME=""
+SERVICE_ACCOUNT_PASSWORD=""
+UNATTENDED=false
+
+# Parse arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --install-path) INSTALL_PATH="$2"; shift ;;
+        --email-to) EMAIL_TO="$2"; shift ;;
+        --email-from) EMAIL_FROM="$2"; shift ;;
+        --email-app-password) EMAIL_APP_PASSWORD="$2"; shift ;;
+        --environment-name) ENVIRONMENT_NAME="$2"; shift ;;
+        --service-account-password) SERVICE_ACCOUNT_PASSWORD="$2"; shift ;;
+        --unattended) UNATTENDED=true ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
+
 LOGS_DIR="$BASE_DIR/Logs"
 if [ ! -d "$LOGS_DIR" ]; then
     mkdir -p "$LOGS_DIR"
@@ -44,8 +68,17 @@ echo ""
 # =====================================================================
 echo -e "\e[32m[STEP 1] Target Installation Path Setup\e[0m"
 DEFAULT_PATH="/opt/immortalmgmt"
-read -p "Enter target installation directory [Default: $DEFAULT_PATH]: " USER_PATH
-INSTALL_PATH="${USER_PATH:-$DEFAULT_PATH}"
+if [ "$UNATTENDED" = true ]; then
+    INSTALL_PATH="${INSTALL_PATH:-$DEFAULT_PATH}"
+else
+    if [ -n "$INSTALL_PATH" ]; then
+        read -p "Enter target installation directory [Default: $INSTALL_PATH]: " USER_PATH
+        INSTALL_PATH="${USER_PATH:-$INSTALL_PATH}"
+    else
+        read -p "Enter target installation directory [Default: $DEFAULT_PATH]: " USER_PATH
+        INSTALL_PATH="${USER_PATH:-$DEFAULT_PATH}"
+    fi
+fi
 
 write_log "Target installation path resolved to: $INSTALL_PATH" "INFO"
 
@@ -84,17 +117,16 @@ fi
 # =====================================================================
 echo ""
 echo -e "\e[32m[STEP 3] Global Configuration Setup (Email Alerting)\e[0m"
-read -p "Do you want to configure email alerts now? (Y/N) [Default: Y]: " CONFIRM_EMAIL
-CONFIRM_EMAIL="${CONFIRM_EMAIL:-Y}"
-
-EMAIL_TO=""
-EMAIL_FROM=""
-EMAIL_APP_PASSWORD=""
-
-if [[ "$CONFIRM_EMAIL" =~ ^[Yy]$ ]]; then
-    read -p "  Enter alert recipient email address (EmailTo): " EMAIL_TO
-    read -p "  Enter alert sender email address (EmailFrom): " EMAIL_FROM
-    read -p "  Enter App-Specific Gmail Password (EmailAppPassword): " EMAIL_APP_PASSWORD
+if [ "$UNATTENDED" = false ]; then
+    if [ -z "$EMAIL_TO" ] && [ -z "$EMAIL_FROM" ]; then
+        read -p "Do you want to configure email alerts now? (Y/N) [Default: Y]: " CONFIRM_EMAIL
+        CONFIRM_EMAIL="${CONFIRM_EMAIL:-Y}"
+        if [[ "$CONFIRM_EMAIL" =~ ^[Yy]$ ]]; then
+            read -p "  Enter alert recipient email address (EmailTo): " EMAIL_TO
+            read -p "  Enter alert sender email address (EmailFrom): " EMAIL_FROM
+            read -p "  Enter App-Specific Gmail Password (EmailAppPassword): " EMAIL_APP_PASSWORD
+        fi
+    fi
 fi
 
 # Update Global Config using inline python
@@ -258,21 +290,27 @@ fi
 # =====================================================================
 echo ""
 echo -e "\e[32m[STEP 5] Environment Variable Validation\e[0m"
-echo "Select framework environment to configure:"
-echo "  1) Production"
-echo "  2) Staging"
-echo "  3) Development"
-echo "  4) Custom"
-read -p "Enter choice (1-4) [Default: 1]: " ENV_CHOICE
-ENV_CHOICE="${ENV_CHOICE:-1}"
+if [ -n "$ENVIRONMENT_NAME" ]; then
+    RESOLVED_ENV="$ENVIRONMENT_NAME"
+elif [ "$UNATTENDED" = true ]; then
+    RESOLVED_ENV="Production"
+else
+    echo "Select framework environment to configure:"
+    echo "  1) Production"
+    echo "  2) Staging"
+    echo "  3) Development"
+    echo "  4) Custom"
+    read -p "Enter choice (1-4) [Default: 1]: " ENV_CHOICE
+    ENV_CHOICE="${ENV_CHOICE:-1}"
 
-case "$ENV_CHOICE" in
-    1) RESOLVED_ENV="Production" ;;
-    2) RESOLVED_ENV="Staging" ;;
-    3) RESOLVED_ENV="Development" ;;
-    4) read -p "Enter custom environment name: " CUSTOM_ENV; RESOLVED_ENV="$CUSTOM_ENV" ;;
-    *) RESOLVED_ENV="Production" ;;
-esac
+    case "$ENV_CHOICE" in
+        1) RESOLVED_ENV="Production" ;;
+        2) RESOLVED_ENV="Staging" ;;
+        3) RESOLVED_ENV="Development" ;;
+        4) read -p "Enter custom environment name: " CUSTOM_ENV; RESOLVED_ENV="$CUSTOM_ENV" ;;
+        *) RESOLVED_ENV="Production" ;;
+    esac
+fi
 
 RESOLVED_ENV="${RESOLVED_ENV:-Production}"
 ENVIRONMENT="$RESOLVED_ENV"
@@ -308,8 +346,15 @@ for root, dirs, files in os.walk(base_dir):
 # =====================================================================
 echo ""
 echo -e "\e[32m[STEP 6] Provisioning Service Account & Hardening Security\e[0m"
-echo -e "\e[90mExecuting New-LocalAdminAccount script to create 'svc_immortalmgmt' and lock down repository...\e[0m"
 
+if [ -n "$SERVICE_ACCOUNT_PASSWORD" ]; then
+    mkdir -p "$BASE_DIR/Credentials"
+    echo -n "$SERVICE_ACCOUNT_PASSWORD" > "$BASE_DIR/Credentials/svc_immortalmgmt.pwd"
+    chmod 600 "$BASE_DIR/Credentials/svc_immortalmgmt.pwd"
+    write_log "Pre-staged service account credentials from command line parameter." "INFO"
+fi
+
+echo -e "\e[90mExecuting New-LocalAdminAccount script to create 'svc_immortalmgmt' and lock down repository...\e[0m"
 ACCOUNT_SCRIPT="$BASE_DIR/Scripts/Linux/30 - New-LocalAdminAccount.sh"
 if [ -f "$ACCOUNT_SCRIPT" ]; then
     chmod +x "$ACCOUNT_SCRIPT"
@@ -329,10 +374,17 @@ fi
 # =====================================================================
 echo ""
 echo -e "\e[32m[STEP 7] Registering Scheduled Tasks (Bootstrapping)\e[0m"
-read -p "Do you want to run the bootstrap script to register scheduled tasks/cronjobs now? (Y/N) [Default: Y]: " RUN_BOOTSTRAP
-RUN_BOOTSTRAP="${RUN_BOOTSTRAP:-Y}"
 
-if [[ "$RUN_BOOTSTRAP" =~ ^[Yy]$ ]]; then
+RUN_BOOT=true
+if [ "$UNATTENDED" = false ]; then
+    read -p "Do you want to run the bootstrap script to register scheduled tasks/cronjobs now? (Y/N) [Default: Y]: " RUN_BOOTSTRAP
+    RUN_BOOTSTRAP="${RUN_BOOTSTRAP:-Y}"
+    if [[ ! "$RUN_BOOTSTRAP" =~ ^[Yy]$ ]]; then
+        RUN_BOOT=false
+    fi
+fi
+
+if [ "$RUN_BOOT" = true ]; then
     BOOTSTRAP_SCRIPT="$BASE_DIR/Scripts/Linux/000 - Bootstrap Script.sh"
     if [ -f "$BOOTSTRAP_SCRIPT" ]; then
         chmod +x "$BOOTSTRAP_SCRIPT"
