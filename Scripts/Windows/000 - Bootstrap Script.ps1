@@ -54,23 +54,44 @@ try {
     $scriptExitCode = 0
 
     # Decrypt the task registration password from svc_immortalmgmt.xml
-    if (-not (Test-Path $credFilePath)) {
-        throw "Encrypted service account credential file not found at $credFilePath. Please ensure you created it using install.ps1 or New-LocalAdminAccount.ps1."
-    }
-    try {
-        $SvcCreds = Import-Clixml -Path $credFilePath
-        if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
-            $secureString = $SvcCreds.Password
-            $taskUser = $SvcCreds.UserName
-        } else {
-            $secureString = $SvcCreds # Assume it is the SecureString itself
+    $DecryptionSuccess = $false
+    if (Test-Path $credFilePath) {
+        try {
+            $SvcCreds = Import-Clixml -Path $credFilePath
+            if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
+                $secureString = $SvcCreds.Password
+                $taskUser = $SvcCreds.UserName
+            } else {
+                $secureString = $SvcCreds
+            }
+            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureString)
+            $taskPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+            $DecryptionSuccess = $true
+        } catch {
+            Write-Log "Failed to decrypt service account password from $credFilePath: $($_.Exception.Message)" "WARNING"
+        } finally {
+            if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
         }
-        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureString)
-        $taskPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-    } catch {
-        throw "Failed to decrypt service account password: $($_.Exception.Message)"
-    } finally {
-        if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
+    }
+
+    if (-not $DecryptionSuccess) {
+        if ([Environment]::UserInteractive) {
+            Write-Log "Prompting to re-enter service account credentials..." "WARNING"
+            Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+            Write-Host "RE-CREATING SERVICE ACCOUNT CREDENTIALS" -ForegroundColor Yellow
+            Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+            $PasswordInput = Read-Host -AsSecureString "Enter secure password for local user '$taskUser'"
+            $CredObject = New-Object System.Management.Automation.PSCredential($taskUser, $PasswordInput)
+            $CredObject | Export-Clixml -Path $credFilePath -Force
+            
+            $secureString = $PasswordInput
+            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureString)
+            $taskPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+            if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
+            Write-Log "Successfully recreated credential file at $credFilePath." "INFO"
+        } else {
+            throw "Failed to decrypt service account password and session is non-interactive."
+        }
     }
 
     try {

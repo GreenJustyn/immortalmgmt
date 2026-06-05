@@ -50,36 +50,47 @@ try {
 
     try {
         # Credential Check & Interactive Generation
-            if (-not (Test-Path $CredFile)) { 
-                if ([Environment]::UserInteractive) {
-                    Write-Log "Credential XML missing at $CredFile. Prompting to create it..." "WARNING"
-                    Write-Host ""
-                    Write-Host "--------------------------------------------------" -ForegroundColor Yellow
-                    Write-Host "CREATING DEDICATED SERVICE ACCOUNT CREDENTIALS" -ForegroundColor Yellow
-                    Write-Host "--------------------------------------------------" -ForegroundColor Yellow
-                    $PasswordInput = Read-Host -AsSecureString "Enter secure password for local user '$($Config.AccountName)'"
-                    
-                    # Create credential object and export
-                    $CredObject = New-Object System.Management.Automation.PSCredential($Config.AccountName, $PasswordInput)
-                    $CredFolder = Split-Path $CredFile
-                    if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
-                    $CredObject | Export-Clixml -Path $CredFile
-                    Write-Log "Successfully created encrypted credential file at $CredFile." "INFO"
+        if (Test-Path $CredFile) {
+            try {
+                $TestCreds = Import-Clixml -Path $CredFile
+                if ($TestCreds -is [System.Management.Automation.PSCredential]) {
+                    $null = $TestCreds.Password
                 } else {
-                    throw "FATAL: Credential XML missing at $CredFile and session is non-interactive."
+                    $null = $TestCreds
                 }
+            } catch {
+                Write-Log "Existing credential XML at $CredFile could not be decrypted (DPAPI key invalid). Removing it to recreate..." "WARNING"
+                Remove-Item -Path $CredFile -Force -ErrorAction SilentlyContinue
             }
-            try { 
-                $SvcCreds = Import-Clixml -Path $CredFile 
-                # Extract SecureString password (New-LocalUser natively accepts this)
-                if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
-                    $SecurePassword = $SvcCreds.Password
-                } else {
-                    $SecurePassword = $SvcCreds # Assume it is the SecureString itself
-                }
-            } catch { 
-                throw "ERROR: Credential import failed. Ensure the script is run by the user who created the XML." 
+        }
+
+        if (-not (Test-Path $CredFile)) { 
+            if ([Environment]::UserInteractive) {
+                Write-Log "Credential XML missing or invalid at $CredFile. Prompting to create it..." "WARNING"
+                Write-Host ""
+                Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+                Write-Host "CREATING DEDICATED SERVICE ACCOUNT CREDENTIALS" -ForegroundColor Yellow
+                Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+                $PasswordInput = Read-Host -AsSecureString "Enter secure password for local user '$($Config.AccountName)'"
+                
+                # Create credential object and export
+                $CredObject = New-Object System.Management.Automation.PSCredential($Config.AccountName, $PasswordInput)
+                $CredFolder = Split-Path $CredFile
+                if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
+                $CredObject | Export-Clixml -Path $CredFile
+                Write-Log "Successfully created encrypted credential file at $CredFile." "INFO"
+            } else {
+                throw "FATAL: Credential XML missing or invalid at $CredFile and session is non-interactive."
             }
+        }
+
+        $SvcCreds = Import-Clixml -Path $CredFile 
+        # Extract SecureString password (New-LocalUser natively accepts this)
+        if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
+            $SecurePassword = $SvcCreds.Password
+        } else {
+            $SecurePassword = $SvcCreds # Assume it is the SecureString itself
+        }
 
             # Idempotent Logic
             $UserExists = Get-LocalUser -Name $Config.AccountName -ErrorAction SilentlyContinue
