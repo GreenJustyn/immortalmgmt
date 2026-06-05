@@ -324,6 +324,30 @@ else
     write_log "Warning: 30 - New-LocalAdminAccount.sh not found." "WARNING"
 fi
 
+# =====================================================================
+# Step 7: Dynamic Task Registration (Bootstrapping)
+# =====================================================================
+echo ""
+echo -e "\e[32m[STEP 7] Registering Scheduled Tasks (Bootstrapping)\e[0m"
+read -p "Do you want to run the bootstrap script to register scheduled tasks/cronjobs now? (Y/N) [Default: Y]: " RUN_BOOTSTRAP
+RUN_BOOTSTRAP="${RUN_BOOTSTRAP:-Y}"
+
+if [[ "$RUN_BOOTSTRAP" =~ ^[Yy]$ ]]; then
+    BOOTSTRAP_SCRIPT="$BASE_DIR/Scripts/Linux/000 - Bootstrap Script.sh"
+    if [ -f "$BOOTSTRAP_SCRIPT" ]; then
+        chmod +x "$BOOTSTRAP_SCRIPT"
+        echo -e "\e[90mExecuting 000 - Bootstrap Script.sh...\e[0m"
+        if [ "$EUID" -ne 0 ]; then
+            sudo "$BOOTSTRAP_SCRIPT"
+        else
+            "$BOOTSTRAP_SCRIPT"
+        fi
+        echo -e "\e[32mScheduled tasks registered and bootstrapped successfully!\e[0m"
+    else
+        write_log "Warning: 000 - Bootstrap Script.sh not found." "WARNING"
+    fi
+fi
+
 echo ""
 echo -e "\e[36m================================================================="
 echo -e "      INSTALLATION AND INITIAL CONFIGURATION COMPLETE!          "

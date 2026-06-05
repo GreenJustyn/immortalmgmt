@@ -268,6 +268,31 @@ try {
         }
     }
     
+    # =====================================================================
+    # Step 7: Dynamic Task Registration (Bootstrapping)
+    # =====================================================================
+    Write-Host ""
+    Write-Host "[STEP 7] Registering Scheduled Tasks (Bootstrapping)" -ForegroundColor Green
+    $RunBootstrap = Read-Host "Do you want to run the bootstrap script to register scheduled tasks now? (Y/N) [Default: Y]"
+    if ([string]::IsNullOrWhiteSpace($RunBootstrap) -or $RunBootstrap.ToUpper().Trim() -eq "Y") {
+        $BootstrapScript = Join-Path (Join-Path $BaseDir "Scripts\Windows") "000 - Bootstrap Script.ps1"
+        if (Test-Path $BootstrapScript) {
+            try {
+                Write-Host "Executing 000 - Bootstrap Script.ps1..." -ForegroundColor Gray
+                $CurrentDir = Get-Location
+                Set-Location (Split-Path $BootstrapScript)
+                & $BootstrapScript
+                Set-Location $CurrentDir
+                Write-Host "Scheduled tasks registered and bootstrapped successfully!" -ForegroundColor Green
+            } catch {
+                Write-Log "Warning: Bootstrap script returned an error: $($_.Exception.Message)" "WARNING"
+                Write-Host "Warning: Bootstrap execution failed. Please run 'C:\Scripts\Scripts\Windows\000 - Bootstrap Script.ps1' manually." -ForegroundColor Yellow
+            }
+        } else {
+            Write-Log "Bootstrap script not found at $BootstrapScript." "WARNING"
+        }
+    }
+    
     Write-Host ""
     Write-Host "=================================================================" -ForegroundColor Cyan
     Write-Host "      INSTALLATION AND INITIAL CONFIGURATION COMPLETE!          " -ForegroundColor Green
