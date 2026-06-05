@@ -296,7 +296,7 @@ try {
         $KeyBase64 | Out-File -FilePath $KeyFile -Encoding utf8 -Force
         
         # Encrypt password
-        $EncryptedText = ConvertFrom-SecureString $ServiceAccountPassword -SecureKey $KeyBytes
+        $EncryptedText = ConvertFrom-SecureString $ServiceAccountPassword -Key $KeyBytes
         $EncryptedText | Out-File -FilePath $EncFile -Encoding utf8 -Force
         
         # Set strict ACL permissions

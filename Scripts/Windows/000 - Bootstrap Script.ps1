@@ -60,7 +60,7 @@ try {
         try {
             $Key = [Convert]::FromBase64String((Get-Content -Path $KeyFile -Raw).Trim())
             $EncryptedText = (Get-Content -Path $EncFile -Raw).Trim()
-            $SecurePassword = ConvertTo-SecureString $EncryptedText -SecureKey $Key
+            $SecurePassword = ConvertTo-SecureString $EncryptedText -Key $Key
             
             $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePassword)
             $taskPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
@@ -88,7 +88,7 @@ try {
             $KeyBase64 | Out-File -FilePath $KeyFile -Encoding utf8 -Force
             
             # Encrypt password
-            $EncryptedText = ConvertFrom-SecureString $PasswordInput -SecureKey $KeyBytes
+            $EncryptedText = ConvertFrom-SecureString $PasswordInput -Key $KeyBytes
             $EncryptedText | Out-File -FilePath $EncFile -Encoding utf8 -Force
             
             $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($PasswordInput)
