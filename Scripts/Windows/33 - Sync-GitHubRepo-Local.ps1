@@ -58,10 +58,136 @@ try {
 
             # 2. Git Environment Check
             if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "FATAL: Git is not installed." }
-            $SecureToken = Import-Clixml -Path $CredFile
-            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureToken)
-            $Token = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+            # Load Git Token from secure symmetric credentials if available, else migrate legacy XML
+            $CredFolder       = Join-Path $BaseDir "Credentials"
+            $gitKeyFile       = Join-Path $CredFolder "git-credential.key"
+            $gitEncFile       = Join-Path $CredFolder "git-credential.enc"
+            
+            # Paths for legacy migration
+            $LegacyGitXml     = Join-Path $CredFolder "git-credential.xml"
+            $LegacyCredXml    = Join-Path $CredFolder "credential.xml"
+
+            $DecryptionSuccess = $false
+
+            if ((Test-Path $gitKeyFile) -and (Test-Path $gitEncFile)) {
+                try {
+                    $Key = [Convert]::FromBase64String((Get-Content -Path $gitKeyFile -Raw).Trim())
+                    $EncryptedText = (Get-Content -Path $gitEncFile -Raw).Trim()
+                    $SecureToken = ConvertTo-SecureString $EncryptedText -Key $Key
+                    $DecryptionSuccess = $true
+                } catch {
+                    Write-Log "Failed to decrypt symmetric git credentials: $($_.Exception.Message)" "WARNING"
+                }
+            }
+
+            if (-not $DecryptionSuccess) {
+                # Try migrating legacy git-credential.xml first, fallback to credential.xml
+                $MigrationSource = $null
+                if (Test-Path $LegacyGitXml) {
+                    $MigrationSource = $LegacyGitXml
+                } elseif (Test-Path $LegacyCredXml) {
+                    $MigrationSource = $LegacyCredXml
+                }
+                
+                if ($MigrationSource) {
+                    try {
+                        $Imported = Import-Clixml -Path $MigrationSource
+                        if ($Imported -is [System.Management.Automation.PSCredential]) {
+                            $SecureToken = $Imported.Password
+                        } else {
+                            $SecureToken = $Imported
+                        }
+                        
+                        # Generate symmetric key
+                        $KeyBytes = New-Object Byte[] 32
+                        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+                        $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
+                        $KeyBase64 | Out-File -FilePath $gitKeyFile -Encoding utf8 -Force
+                        
+                        $EncryptedText = ConvertFrom-SecureString $SecureToken -Key $KeyBytes
+                        $EncryptedText | Out-File -FilePath $gitEncFile -Encoding utf8 -Force
+                        
+                        # Set strict ACL permissions
+                        try {
+                            $Acls = @($gitKeyFile, $gitEncFile)
+                            foreach ($file in $Acls) {
+                                $Acl = Get-Acl -Path $file
+                                $Acl.SetAccessRuleProtection($true, $false)
+                                $Rules = @(
+                                    [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                                    [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                                    [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                                )
+                                $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                                foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                                Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+                            }
+                        } catch {
+                            Write-Log "Warning: Failed to set strict ACLs on git credential files: $($_.Exception.Message)" "WARNING"
+                        }
+                        
+                        $DecryptionSuccess = $true
+                        Write-Log "Successfully migrated legacy Git XML credentials ($MigrationSource) to symmetric key encryption." "INFO"
+                    } catch {
+                        Write-Log "Failed to decrypt legacy XML Git credential file: $($_.Exception.Message)" "WARNING"
+                    }
+                }
+            }
+
+            if (-not $DecryptionSuccess) {
+                if ([Environment]::UserInteractive) {
+                    Write-Log "Symmetric git credential files missing or invalid. Prompting to create them..." "WARNING"
+                    Write-Host ""
+                    Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+                    Write-Host "CREATING GITHUB ACCESS TOKEN CREDENTIALS (GIT)" -ForegroundColor Yellow
+                    Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+                    $PasswordInput = Read-Host -AsSecureString "Enter your GitHub Personal Access Token"
+                    
+                    # Generate key file
+                    $KeyBytes = New-Object Byte[] 32
+                    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+                    $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
+                    if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
+                    $KeyBase64 | Out-File -FilePath $gitKeyFile -Encoding utf8 -Force
+                    
+                    # Encrypt token
+                    $EncryptedText = ConvertFrom-SecureString $PasswordInput -Key $KeyBytes
+                    $EncryptedText | Out-File -FilePath $gitEncFile -Encoding utf8 -Force
+                    
+                    $SecureToken = $PasswordInput
+                    $DecryptionSuccess = $true
+                    
+                    # Set ACLs
+                    try {
+                        $Acls = @($gitKeyFile, $gitEncFile)
+                        foreach ($file in $Acls) {
+                            $Acl = Get-Acl -Path $file
+                            $Acl.SetAccessRuleProtection($true, $false)
+                            $Rules = @(
+                                [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                                [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                                [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                            )
+                            $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                            foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                            Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+                        }
+                    } catch {
+                        Write-Log "Warning: Failed to set strict ACLs on git credential files: $($_.Exception.Message)" "WARNING"
+                    }
+                    
+                    Write-Log "Successfully created symmetric git credentials." "INFO"
+                } else {
+                    throw "FATAL: Symmetric git credentials missing or invalid and session is non-interactive."
+                }
+            }
+
+            try {
+                $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureToken)
+                $Token = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+            } finally {
+                if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
+            }
 
             $RepoPath = $Config.LocalRepoPath # Usually <BaseDir>\Git\<RepoName>
             $Branch   = $Config.Branch
