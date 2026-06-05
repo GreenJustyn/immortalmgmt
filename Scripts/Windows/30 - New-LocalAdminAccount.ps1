@@ -119,9 +119,9 @@ try {
             
             # Define strict permissions: only SYSTEM, Administrators, and svc_immortalmgmt have access
             $Rules = @(
-                New-Object System.Security.AccessControl.FileSystemAccessRule("SYSTEM", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"),
-                New-Object System.Security.AccessControl.FileSystemAccessRule("Administrators", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"),
-                New-Object System.Security.AccessControl.FileSystemAccessRule($Config.AccountName, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
+                [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"),
+                [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"),
+                [System.Security.AccessControl.FileSystemAccessRule]::new($Config.AccountName, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
             )
             
             foreach ($Rule in $Rules) {
@@ -181,7 +181,7 @@ try {
                     Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
                 } else {
                     Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
-                    Update-Module -Name PoshMailKit -Force -Scope CurrentUser -ErrorAction SilentlyContinue
+                    Update-Module -Name PoshMailKit -Force -ErrorAction SilentlyContinue
                 }
 
                 $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force

@@ -103,7 +103,7 @@ try {
                     Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
                 } else {
                     Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
-                    Update-Module -Name PoshMailKit -Force -Scope CurrentUser -ErrorAction SilentlyContinue
+                    Update-Module -Name PoshMailKit -Force -ErrorAction SilentlyContinue
                 }
 
                 $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
