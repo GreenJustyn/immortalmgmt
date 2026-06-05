@@ -115,39 +115,7 @@ try {
                 throw "The script folder $TargetScriptFolder does not exist."
             }
 
-            # Transition Cleanup: Remove legacy Tasks from 'JustynScripts' and delete the folder.
-            $oldTaskPath = "\JustynScripts"
             try {
-                $oldTasks = Get-ScheduledTask -TaskPath $oldTaskPath -ErrorAction SilentlyContinue
-                if ($oldTasks) {
-                    Write-Log "Detected legacy Task Scheduler folder '$oldTaskPath' with $($oldTasks.Count) tasks. Starting cleanup..." "INFO"
-                    foreach ($oldTask in $oldTasks) {
-                        Write-Log "Unregistering legacy task: $($oldTask.Name) from '$oldTaskPath'" "INFO"
-                        if ($oldTask.State -eq "Running") {
-                            Stop-ScheduledTask -TaskName $oldTask.Name -TaskPath $oldTaskPath -ErrorAction SilentlyContinue
-                        }
-                        Unregister-ScheduledTask -TaskName $oldTask.Name -TaskPath $oldTaskPath -Confirm:$false -ErrorAction SilentlyContinue
-                    }
-                }
-
-                # Double-check force delete with native schtasks for any hidden/residual tasks in JustynScripts
-                Write-Log "Performing native force cleanup on 'JustynScripts' tasks..." "INFO"
-                & schtasks.exe /Delete /TN "JustynScripts\*" /F *>$null
-
-                # Delete the empty folder 'JustynScripts' using COM Object
-                $schedule = New-Object -ComObject Schedule.Service
-                $schedule.Connect()
-                $rootFolder = $schedule.GetFolder("\")
-                try {
-                    $oldFolder = $rootFolder.GetFolder("JustynScripts")
-                    if ($null -ne $oldFolder) {
-                        $rootFolder.DeleteFolder("JustynScripts", 0)
-                        Write-Log "Successfully deleted legacy Task Scheduler folder 'JustynScripts'." "INFO"
-                    }
-                } catch {
-                    # Folder may already be deleted or not empty
-                }
-
                 # Clean up any previously registered install or commander tasks in the new folder
                 $oneOffTasks = @("install-immortalmgmt", "powershell_commander-immortalmgmt", "54 - Install-ImmortalMgmt-immortalmgmt", "55 - PowerShell-Commander-immortalmgmt")
                 foreach ($oneOffTask in $oneOffTasks) {
@@ -157,7 +125,7 @@ try {
                     }
                 }
             } catch {
-                Write-Log "Warning: Legacy task/folder cleanup encountered an issue: $($_.Exception.Message)" "WARNING"
+                Write-Log "Warning: One-off interactive task cleanup encountered an issue: $($_.Exception.Message)" "WARNING"
             }
 
             $scripts = Get-ChildItem -Path $TargetScriptFolder -Filter "*.ps1" -File
