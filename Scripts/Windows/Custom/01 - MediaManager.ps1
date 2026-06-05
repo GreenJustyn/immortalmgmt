@@ -472,41 +472,40 @@ try {
         if ($errorLines.Count -gt 0) {
             Write-Log "$($errorLines.Count) error(s) found. Attempting to send email alert..."
             
-            if ([string]::IsNullOrWhiteSpace($appPassword)) {
-                Write-Log "Failed to send email alert: EmailAppPassword is null or empty in configuration." "ERROR"
-                return
-            }
-            
-            $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
-            $credential = New-Object System.Management.Automation.PSCredential ($emailFrom, $secPassword)
-            
-            $emailBody = "The following errors were detected in the media script run:`n`n" + ($errorLines -join "`n")
-            
-            try {
-                if (-not (Get-Module -ListAvailable -Name PoshMailKit)) {
-                    Write-Log "PoshMailKit module is not installed. Attempting installation..." "WARNING"
-                    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-                        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser -ErrorAction SilentlyContinue | Out-Null
-                    }
-                    Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
-                } else {
-                    Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
-                    Update-Module -Name PoshMailKit -Force -ErrorAction SilentlyContinue
-                }
-
-                Import-Module PoshMailKit -ErrorAction Stop
-                Send-MKMailMessage -To $emailTo `
-                                   -From $emailFrom `
-                                   -Subject "Script Alert: Media Manager Errors Detected" `
-                                   -Body $emailBody `
-                                   -SmtpServer "smtp.gmail.com" `
-                                   -Port 587 `
-                                   -UseSsl `
-                                   -Credential $credential
+            if (-not [string]::IsNullOrWhiteSpace($appPassword)) {
+                $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
+                $credential = New-Object System.Management.Automation.PSCredential ($emailFrom, $secPassword)
                 
-                Write-Log "Error alert email sent successfully."
-            } catch {
-                Write-Log "Failed to send email alert: $($_.Exception.Message)" "CRITICAL"
+                $emailBody = "The following errors were detected in the media script run:`n`n" + ($errorLines -join "`n")
+                
+                try {
+                    if (-not (Get-Module -ListAvailable -Name PoshMailKit)) {
+                        Write-Log "PoshMailKit module is not installed. Attempting installation..." "WARNING"
+                        if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser -ErrorAction SilentlyContinue | Out-Null
+                        }
+                        Install-Module -Name PoshMailKit -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop
+                    } else {
+                        Write-Log "PoshMailKit module is installed. Checking for updates..." "INFO"
+                        Update-Module -Name PoshMailKit -Force -ErrorAction SilentlyContinue
+                    }
+
+                    Import-Module PoshMailKit -ErrorAction Stop
+                    Send-MKMailMessage -To $emailTo `
+                                       -From $emailFrom `
+                                       -Subject "Script Alert: Media Manager Errors Detected" `
+                                       -Body $emailBody `
+                                       -SmtpServer "smtp.gmail.com" `
+                                       -Port 587 `
+                                       -UseSsl `
+                                       -Credential $credential
+                    
+                    Write-Log "Error alert email sent successfully."
+                } catch {
+                    Write-Log "Failed to send email alert: $($_.Exception.Message)" "CRITICAL"
+                }
+            } else {
+                Write-Log "Failed to send email alert: EmailAppPassword is null or empty in configuration." "ERROR"
             }
         } else {
             Write-Log "No errors found in the last 5 minutes."
