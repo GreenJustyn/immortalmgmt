@@ -15,6 +15,7 @@ Before initiating the bootstrap sequence, verify the target node meets these par
    Set-ExecutionPolicy RemoteSigned -Force
    ```
 4. 📦 **Dependencies**: Git for Windows must be installed and globally available in the system `PATH`.
+5. 🐧 **WSL (Windows Subsystem for Linux)**: WSL must be installed and configured with a default Linux distribution (e.g., Ubuntu) if executing custom media manager actions: run `wsl --install` in an elevated shell and restart the server.
 
 ---
 

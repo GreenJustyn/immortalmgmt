@@ -89,7 +89,14 @@ Rotate-Log
 Write-Log "#################### --------- Start of script -- $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') --------- ####################"
 
 if (-not (Get-Command "wsl.exe" -ErrorAction SilentlyContinue)) {
-    Write-Log "WSL is not installed. Exiting." "CRITICAL"
+    Write-Log "WSL is not installed on this system. Exiting." "CRITICAL"
+    exit
+}
+
+# Verify at least one WSL distribution is registered/installed
+$wslCheck = & wsl.exe --list 2>&1
+if ($wslCheck -match "no installed distributions" -or $wslCheck -match "list available distributions" -or $LASTEXITCODE -ne 0) {
+    Write-Log "WSL is enabled, but no default Linux distribution is installed. Please run 'wsl --install -d Ubuntu' in an elevated shell." "CRITICAL"
     exit
 }
 
