@@ -242,6 +242,33 @@ Set-Content -Path $tempCredFile.FullName -Value $plainPassword -NoNewline
 $wslTempCredPath = ConvertTo-WslPath $tempCredFile.FullName
 
 # =====================================================================
+# Step 1.5: Validate and Provision WSL Package Dependencies
+# =====================================================================
+Write-Log "Verifying package dependencies inside WSL..." "INFO"
+
+$wslPipCheck = wsl.exe -e sh -c "command -v pip3"
+$wslSshpassCheck = wsl.exe -e sh -c "command -v sshpass"
+
+if (-not $wslPipCheck -or -not $wslSshpassCheck) {
+    Write-Log "WSL is missing required system packages (pip3 or sshpass). Initiating automated package provisioning..." "WARNING"
+    try {
+        # Perform apt update and install required packages silently
+        $aptCmd = "cat '$wslTempCredPath' | sudo -S apt-get update -y && cat '$wslTempCredPath' | sudo -S apt-get install -y python3-pip sshpass python3"
+        Write-Log "Executing apt installation inside WSL..." "INFO"
+        $aptOutput = wsl.exe -e sh -c $aptCmd 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Apt installation failed. Output: $aptOutput"
+        }
+        Write-Log "WSL packages (pip3, sshpass, python3) successfully provisioned." "INFO"
+    } catch {
+        Write-Log "Failed to provision WSL dependencies: $($_.Exception.Message)" "CRITICAL"
+        exit 1
+    }
+} else {
+    Write-Log "All WSL package dependencies (pip3, sshpass) are already installed." "INFO"
+}
+
+# =====================================================================
 # Main Execution Try/Catch Block
 # =====================================================================
 try {
@@ -303,7 +330,7 @@ try {
     # ---------------------------------------------------------------------
     Write-Log "Starting Local to Plex Transfer (Default Distro)..."
 
-    $sshpassCheck = wsl.exe -e bash -c "command -v sshpass"
+    $sshpassCheck = wsl.exe -e sh -c "command -v sshpass"
     if (-not $sshpassCheck) {
         Write-Log "sshpass is NOT installed in your default WSL distro. Please install it." "CRITICAL"
         exit
