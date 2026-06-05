@@ -68,7 +68,7 @@ try {
             $taskPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
             $DecryptionSuccess = $true
         } catch {
-            Write-Log "Failed to decrypt service account password from $credFilePath: $($_.Exception.Message)" "WARNING"
+            Write-Log "Failed to decrypt service account password from $($credFilePath): $($_.Exception.Message)" "WARNING"
         } finally {
             if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
         }
