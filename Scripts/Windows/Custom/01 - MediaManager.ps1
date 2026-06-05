@@ -93,19 +93,114 @@ if (-not (Get-Command "wsl.exe" -ErrorAction SilentlyContinue)) {
     exit
 }
 
-if (-not (Test-Path $winCredFilePath)) {
-    Write-Log "Credential XML file not found at $winCredFilePath. Exiting." "CRITICAL"
-    exit
+# Load password from secure Credentials/stuff.key and stuff.enc if available, else migrate legacy stuff.xml
+$CredFolder       = Join-Path $BaseDir "Credentials"
+$stuffKeyFile     = Join-Path $CredFolder "stuff.key"
+$stuffEncFile     = Join-Path $CredFolder "stuff.enc"
+
+$DecryptionSuccess = $false
+
+if ((Test-Path $stuffKeyFile) -and (Test-Path $stuffEncFile)) {
+    try {
+        $Key = [Convert]::FromBase64String((Get-Content -Path $stuffKeyFile -Raw).Trim())
+        $EncryptedText = (Get-Content -Path $stuffEncFile -Raw).Trim()
+        $SecureString = ConvertTo-SecureString $EncryptedText -Key $Key
+        $plainPassword = [System.Net.NetworkCredential]::new("", $SecureString).Password
+        $DecryptionSuccess = $true
+    } catch {
+        Write-Log "Failed to decrypt symmetric stuff credentials: $($_.Exception.Message)" "WARNING"
+    }
 }
 
-# 1. Decrypt XML and extract plain password into memory
-try {
-    $secureString = Import-Clixml -Path $winCredFilePath
-    # Safely convert the standalone SecureString back to plain text
-    $plainPassword = [System.Net.NetworkCredential]::new("", $secureString).Password
-} catch {
-    Write-Log "Failed to decrypt XML credential file. Ensure script is run by the user who created it." "CRITICAL"
-    exit
+if (-not $DecryptionSuccess) {
+    if (Test-Path $winCredFilePath) {
+        try {
+            $secureString = Import-Clixml -Path $winCredFilePath
+            $plainPassword = [System.Net.NetworkCredential]::new("", $secureString).Password
+            
+            # Migrate to symmetric files on the fly
+            $KeyBytes = New-Object Byte[] 32
+            [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+            $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
+            $KeyBase64 | Out-File -FilePath $stuffKeyFile -Encoding utf8 -Force
+            
+            $EncryptedText = ConvertFrom-SecureString $secureString -Key $KeyBytes
+            $EncryptedText | Out-File -FilePath $stuffEncFile -Encoding utf8 -Force
+            
+            # Set strict ACL permissions
+            try {
+                $Acls = @($stuffKeyFile, $stuffEncFile)
+                foreach ($file in $Acls) {
+                    $Acl = Get-Acl -Path $file
+                    $Acl.SetAccessRuleProtection($true, $false)
+                    $Rules = @(
+                        [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                        [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                        [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                    )
+                    $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                    foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                    Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+                }
+            } catch {
+                Write-Log "Warning: Failed to set strict ACLs on symmetric stuff files: $($_.Exception.Message)" "WARNING"
+            }
+            
+            $DecryptionSuccess = $true
+            Write-Log "Successfully migrated legacy DPAPI stuff.xml to symmetric key encryption on-the-fly." "INFO"
+        } catch {
+            Write-Log "Failed to decrypt legacy XML credential file: $($_.Exception.Message)" "WARNING"
+        }
+    }
+}
+
+if (-not $DecryptionSuccess) {
+    if ([Environment]::UserInteractive) {
+        Write-Log "Symmetric credential files missing or invalid. Prompting to create them..." "WARNING"
+        Write-Host ""
+        Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+        Write-Host "CREATING REMOTE HOST SSH CREDENTIALS (STUFF)" -ForegroundColor Yellow
+        Write-Host "--------------------------------------------------" -ForegroundColor Yellow
+        $PasswordInput = Read-Host -AsSecureString "Enter password for remote SSH host"
+        
+        # Generate key file
+        $KeyBytes = New-Object Byte[] 32
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+        $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
+        if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
+        $KeyBase64 | Out-File -FilePath $stuffKeyFile -Encoding utf8 -Force
+        
+        # Encrypt password
+        $EncryptedText = ConvertFrom-SecureString $PasswordInput -Key $KeyBytes
+        $EncryptedText | Out-File -FilePath $stuffEncFile -Encoding utf8 -Force
+        
+        $plainPassword = [System.Net.NetworkCredential]::new("", $PasswordInput).Password
+        $DecryptionSuccess = $true
+        
+        # Set ACLs
+        try {
+            $Acls = @($stuffKeyFile, $stuffEncFile)
+            foreach ($file in $Acls) {
+                $Acl = Get-Acl -Path $file
+                $Acl.SetAccessRuleProtection($true, $false)
+                $Rules = @(
+                    [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                    [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                    [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                )
+                $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+            }
+        } catch {
+            Write-Log "Warning: Failed to set strict ACLs on symmetric stuff files: $($_.Exception.Message)" "WARNING"
+        }
+        
+        Write-Log "Successfully created symmetric credentials for remote host." "INFO"
+    } else {
+        Write-Log "Failed to decrypt SSH credentials and session is non-interactive. Ensure C:\Scripts\Credentials\stuff.key and stuff.enc exist." "CRITICAL"
+        exit
+    }
 }
 
 # 2. Create volatile temp file for WSL to read (will be deleted in finally block)
