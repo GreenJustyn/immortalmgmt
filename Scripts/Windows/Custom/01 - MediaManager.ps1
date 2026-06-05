@@ -46,7 +46,7 @@ $logFilePath         = $LogFile
 $masterLogPath       = $LogFile
 $emailTo             = $config.emailTo
 $emailFrom           = $config.emailFrom
-$appPassword         = $config.appPassword
+$appPassword         = $config.EmailAppPassword
 
 # =====================================================================
 # Helper Functions
@@ -471,6 +471,11 @@ try {
         
         if ($errorLines.Count -gt 0) {
             Write-Log "$($errorLines.Count) error(s) found. Attempting to send email alert..."
+            
+            if ([string]::IsNullOrWhiteSpace($appPassword)) {
+                Write-Log "Failed to send email alert: EmailAppPassword is null or empty in configuration." "ERROR"
+                return
+            }
             
             $secPassword = ConvertTo-SecureString $appPassword -AsPlainText -Force
             $credential = New-Object System.Management.Automation.PSCredential ($emailFrom, $secPassword)
