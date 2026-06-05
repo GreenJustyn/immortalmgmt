@@ -285,11 +285,40 @@ try {
     # Pre-stage the credential file if ServiceAccountPassword parameter is provided
     if ($ServiceAccountPassword) {
         $CredFolder = Join-Path $BaseDir "Credentials"
-        $CredFile = Join-Path $CredFolder "svc_immortalmgmt.xml"
-        $CredObject = New-Object System.Management.Automation.PSCredential("svc_immortalmgmt", $ServiceAccountPassword)
+        $KeyFile = Join-Path $CredFolder "svc_immortalmgmt.key"
+        $EncFile = Join-Path $CredFolder "svc_immortalmgmt.enc"
+        
+        # Generate key file
+        $KeyBytes = New-Object Byte[] 32
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+        $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
         if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
-        $CredObject | Export-Clixml -Path $CredFile -Force
-        Write-Log "Pre-staged service account credentials from ServiceAccountPassword parameter." "INFO"
+        $KeyBase64 | Out-File -FilePath $KeyFile -Encoding utf8 -Force
+        
+        # Encrypt password
+        $EncryptedText = ConvertFrom-SecureString $ServiceAccountPassword -SecureKey $KeyBytes
+        $EncryptedText | Out-File -FilePath $EncFile -Encoding utf8 -Force
+        
+        # Set strict ACL permissions
+        try {
+            $Acls = @($KeyFile, $EncFile)
+            foreach ($file in $Acls) {
+                $Acl = Get-Acl -Path $file
+                $Acl.SetAccessRuleProtection($true, $false)
+                $Rules = @(
+                    [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                    [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                    [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                )
+                $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+            }
+        } catch {
+            Write-Log "Warning: Failed to set strict ACLs on credential files during unattended pre-stage: $($_.Exception.Message)" "WARNING"
+        }
+        
+        Write-Log "Pre-staged service account symmetric credentials from ServiceAccountPassword parameter." "INFO"
     }
 
     Write-Host "Executing New-LocalAdminAccount script to create 'svc_immortalmgmt' and lock down repository..." -ForegroundColor Gray

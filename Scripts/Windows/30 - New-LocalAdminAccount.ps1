@@ -7,7 +7,9 @@ $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
 $ConfigFile  = Join-Path (Join-Path $BaseDir "Variables") "$ScriptName.json"
 $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
-$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "svc_immortalmgmt.xml"
+$CredFolder  = Join-Path $BaseDir "Credentials"
+$KeyFile     = Join-Path $CredFolder "svc_immortalmgmt.key"
+$EncFile     = Join-Path $CredFolder "svc_immortalmgmt.enc"
 $Environment = "#{ENVIRONMENT}#"
 
 Function Write-Log {
@@ -50,46 +52,68 @@ try {
 
     try {
         # Credential Check & Interactive Generation
-        if (Test-Path $CredFile) {
+        $DecryptionSuccess = $false
+        if ((Test-Path $KeyFile) -and (Test-Path $EncFile)) {
             try {
-                $TestCreds = Import-Clixml -Path $CredFile
-                if ($TestCreds -is [System.Management.Automation.PSCredential]) {
-                    $null = $TestCreds.Password
-                } else {
-                    $null = $TestCreds
-                }
+                $Key = [Convert]::FromBase64String((Get-Content -Path $KeyFile -Raw).Trim())
+                $EncryptedText = (Get-Content -Path $EncFile -Raw).Trim()
+                $SecurePassword = ConvertTo-SecureString $EncryptedText -SecureKey $Key
+                $DecryptionSuccess = $true
             } catch {
-                Write-Log "Existing credential XML at $CredFile could not be decrypted (DPAPI key invalid). Removing it to recreate..." "WARNING"
-                Remove-Item -Path $CredFile -Force -ErrorAction SilentlyContinue
+                Write-Log "Existing symmetric credentials could not be decrypted. Removing files to recreate..." "WARNING"
+                Remove-Item -Path $KeyFile, $EncFile -Force -ErrorAction SilentlyContinue
             }
         }
 
-        if (-not (Test-Path $CredFile)) { 
+        if (-not $DecryptionSuccess) { 
             if ([Environment]::UserInteractive) {
-                Write-Log "Credential XML missing or invalid at $CredFile. Prompting to create it..." "WARNING"
+                Write-Log "Credential files missing or invalid. Prompting to create them..." "WARNING"
                 Write-Host ""
                 Write-Host "--------------------------------------------------" -ForegroundColor Yellow
                 Write-Host "CREATING DEDICATED SERVICE ACCOUNT CREDENTIALS" -ForegroundColor Yellow
                 Write-Host "--------------------------------------------------" -ForegroundColor Yellow
                 $PasswordInput = Read-Host -AsSecureString "Enter secure password for local user '$($Config.AccountName)'"
                 
-                # Create credential object and export
-                $CredObject = New-Object System.Management.Automation.PSCredential($Config.AccountName, $PasswordInput)
-                $CredFolder = Split-Path $CredFile
+                # Generate key file
+                $KeyBytes = New-Object Byte[] 32
+                [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+                $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
                 if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
-                $CredObject | Export-Clixml -Path $CredFile
-                Write-Log "Successfully created encrypted credential file at $CredFile." "INFO"
+                $KeyBase64 | Out-File -FilePath $KeyFile -Encoding utf8 -Force
+                
+                # Encrypt password
+                $EncryptedText = ConvertFrom-SecureString $PasswordInput -SecureKey $KeyBytes
+                $EncryptedText | Out-File -FilePath $EncFile -Encoding utf8 -Force
+                
+                $SecurePassword = $PasswordInput
+                $DecryptionSuccess = $true
+                Write-Log "Successfully created encrypted key and credential files." "INFO"
             } else {
-                throw "FATAL: Credential XML missing or invalid at $CredFile and session is non-interactive."
+                throw "FATAL: Credentials missing or invalid and session is non-interactive."
             }
         }
 
-        $SvcCreds = Import-Clixml -Path $CredFile 
-        # Extract SecureString password (New-LocalUser natively accepts this)
-        if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
-            $SecurePassword = $SvcCreds.Password
-        } else {
-            $SecurePassword = $SvcCreds # Assume it is the SecureString itself
+        # Secure the key and enc files with ACLs (only SYSTEM, Administrators, and svc_immortalmgmt have access)
+        try {
+            $Acls = @($KeyFile, $EncFile)
+            foreach ($file in $Acls) {
+                if (Test-Path $file) {
+                    $Acl = Get-Acl -Path $file
+                    $Acl.SetAccessRuleProtection($true, $false)
+                    $Rules = @(
+                        [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                        [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                        [System.Security.AccessControl.FileSystemAccessRule]::new($Config.AccountName, "ReadAndExecute", "Allow")
+                    )
+                    # Clear existing rules
+                    $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                    foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                    Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+                }
+            }
+            Write-Log "Credential key files ACL security hardened." "INFO"
+        } catch {
+            Write-Log "Warning: Failed to set strict ACLs on credential files: $($_.Exception.Message)" "WARNING"
         }
 
             # Idempotent Logic

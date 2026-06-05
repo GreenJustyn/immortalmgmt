@@ -1,0 +1,19 @@
+# Credentials and Keys
+Credentials/*.xml
+Credentials/*.key
+Credentials/*.enc
+Credentials/*.pwd
+!Credentials/*.md
+
+# Logs
+Logs/*.log
+Scripts/Windows/Logs/*.log
+Scripts/Linux/Logs/*.log
+
+# Host Specific dynamic variables
+Variables/Hosts/*/
+!Variables/Hosts/DefaultHost/
+
+# Python cache
+__pycache__/
+*.pyc

@@ -6,13 +6,14 @@ $ScriptDir   = $PSScriptRoot
 $BaseDir     = Split-Path (Split-Path $ScriptDir -Parent) -Parent
 
 $configFilePath = Join-Path (Join-Path $BaseDir "Variables") "000 - Bootstrap Script.json"
-$credFilePath   = Join-Path (Join-Path $BaseDir "Credentials") "svc_immortalmgmt.xml"
-$taskUser       = "svc_immortalmgmt" # Change to "DOMAIN\Administrator" or ".\Administrator" if needed
+$CredFolder  = Join-Path $BaseDir "Credentials"
+$KeyFile     = Join-Path $CredFolder "svc_immortalmgmt.key"
+$EncFile     = Join-Path $CredFolder "svc_immortalmgmt.enc"
+$taskUser       = "svc_immortalmgmt"
 
 $LogFile     = Join-Path (Join-Path $BaseDir "Logs") "$ScriptName.log"
 $ConfigFile  = Join-Path (Join-Path $BaseDir "Variables") "$ScriptName.json"
 $GlobalFile  = Join-Path (Join-Path $BaseDir "Variables") "_Global.json"
-$CredFile    = Join-Path (Join-Path $BaseDir "Credentials") "svc_immortalmgmt.xml"
 $Environment = "#{ENVIRONMENT}#"
 
 Function Write-Log {
@@ -53,22 +54,19 @@ $scriptExitCode = 0
 try {
     $scriptExitCode = 0
 
-    # Decrypt the task registration password from svc_immortalmgmt.xml
+    # Decrypt the task registration password
     $DecryptionSuccess = $false
-    if (Test-Path $credFilePath) {
+    if ((Test-Path $KeyFile) -and (Test-Path $EncFile)) {
         try {
-            $SvcCreds = Import-Clixml -Path $credFilePath
-            if ($SvcCreds -is [System.Management.Automation.PSCredential]) {
-                $secureString = $SvcCreds.Password
-                $taskUser = $SvcCreds.UserName
-            } else {
-                $secureString = $SvcCreds
-            }
-            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureString)
+            $Key = [Convert]::FromBase64String((Get-Content -Path $KeyFile -Raw).Trim())
+            $EncryptedText = (Get-Content -Path $EncFile -Raw).Trim()
+            $SecurePassword = ConvertTo-SecureString $EncryptedText -SecureKey $Key
+            
+            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePassword)
             $taskPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
             $DecryptionSuccess = $true
         } catch {
-            Write-Log "Failed to decrypt service account password from $($credFilePath): $($_.Exception.Message)" "WARNING"
+            Write-Log "Failed to decrypt service account password: $($_.Exception.Message)" "WARNING"
         } finally {
             if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
         }
@@ -81,14 +79,43 @@ try {
             Write-Host "RE-CREATING SERVICE ACCOUNT CREDENTIALS" -ForegroundColor Yellow
             Write-Host "--------------------------------------------------" -ForegroundColor Yellow
             $PasswordInput = Read-Host -AsSecureString "Enter secure password for local user '$taskUser'"
-            $CredObject = New-Object System.Management.Automation.PSCredential($taskUser, $PasswordInput)
-            $CredObject | Export-Clixml -Path $credFilePath -Force
             
-            $secureString = $PasswordInput
-            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureString)
+            # Generate key file
+            $KeyBytes = New-Object Byte[] 32
+            [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($KeyBytes)
+            $KeyBase64 = [Convert]::ToBase64String($KeyBytes)
+            if (-not (Test-Path $CredFolder)) { New-Item -Path $CredFolder -ItemType Directory -Force | Out-Null }
+            $KeyBase64 | Out-File -FilePath $KeyFile -Encoding utf8 -Force
+            
+            # Encrypt password
+            $EncryptedText = ConvertFrom-SecureString $PasswordInput -SecureKey $KeyBytes
+            $EncryptedText | Out-File -FilePath $EncFile -Encoding utf8 -Force
+            
+            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($PasswordInput)
             $taskPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
             if ($BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
-            Write-Log "Successfully recreated credential file at $credFilePath." "INFO"
+            $DecryptionSuccess = $true
+            
+            # Set ACLs
+            try {
+                $Acls = @($KeyFile, $EncFile)
+                foreach ($file in $Acls) {
+                    $Acl = Get-Acl -Path $file
+                    $Acl.SetAccessRuleProtection($true, $false)
+                    $Rules = @(
+                        [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                        [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                        [System.Security.AccessControl.FileSystemAccessRule]::new($taskUser, "ReadAndExecute", "Allow")
+                    )
+                    $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                    foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                    Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+                }
+            } catch {
+                Write-Log "Warning: Failed to set strict ACLs on credential files: $($_.Exception.Message)" "WARNING"
+            }
+            
+            Write-Log "Successfully recreated symmetric credentials." "INFO"
         } else {
             throw "Failed to decrypt service account password and session is non-interactive."
         }
