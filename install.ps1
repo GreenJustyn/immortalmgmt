@@ -175,16 +175,16 @@ try {
     } else {
         Write-Log "WSL and default Linux distribution are available." "INFO"
         
-        # Pre-provision WSL package dependencies directly as root
+        # Pre-provision WSL package dependencies directly as root via stdin pipe to bypass wsl.exe argument parsing bugs
         Write-Log "Pre-provisioning WSL package dependencies (pip3, sshpass, mnamer)..." "INFO"
         try {
             $aptCmd = "apt-get update && apt-get install -y python3-pip sshpass python3 && pip3 install --upgrade mnamer --break-system-packages"
-            $process = Start-Process -FilePath "wsl.exe" -ArgumentList "-u", "root", "-e", "sh", "-c", $aptCmd -NoNewWindow -PassThru -Wait
+            $output = $aptCmd | wsl.exe -u root 2>&1
             
-            if ($process.ExitCode -eq 0) {
+            if ($LASTEXITCODE -eq 0) {
                 Write-Log "WSL dependencies successfully pre-provisioned." "INFO"
             } else {
-                Write-Log "Warning: WSL dependency pre-provisioning returned non-zero exit code: $($process.ExitCode)" "WARNING"
+                Write-Log "Warning: WSL dependency pre-provisioning returned non-zero exit code: $LASTEXITCODE. Output: $output" "WARNING"
             }
         } catch {
             Write-Log "Warning: Failed to pre-provision WSL dependencies during installation: $($_.Exception.Message)" "WARNING"
