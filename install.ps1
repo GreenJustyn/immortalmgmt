@@ -179,7 +179,7 @@ try {
         Write-Log "Pre-provisioning WSL package dependencies (pip3, sshpass, mnamer)..." "INFO"
         try {
             $aptCmd = "apt-get update && apt-get install -y python3-pip sshpass python3 && (pip3 install --upgrade mnamer || pip3 install --upgrade mnamer --break-system-packages)"
-            $output = $aptCmd | wsl.exe -u root 2>&1
+            $output = $aptCmd.Replace("`r", "") | wsl.exe -u root 2>&1
             
             if ($LASTEXITCODE -eq 0) {
                 Write-Log "WSL dependencies successfully pre-provisioned." "INFO"

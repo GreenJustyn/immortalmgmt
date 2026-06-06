@@ -252,7 +252,7 @@ if (-not $wslPipCheck -or -not $wslSshpassCheck -or -not $wslMnamerCheck) {
         if (-not $wslPipCheck -or -not $wslSshpassCheck) {
             Write-Log "Installing system packages (python3-pip, sshpass) via apt-get directly as root..." "INFO"
             $aptCmd = "apt-get update && apt-get install -y python3-pip sshpass python3"
-            $aptOutput = $aptCmd | wsl.exe -u root 2>&1
+            $aptOutput = $aptCmd.Replace("`r", "") | wsl.exe -u root 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "Apt installation failed. Output: $aptOutput"
             }
@@ -262,7 +262,7 @@ if (-not $wslPipCheck -or -not $wslSshpassCheck -or -not $wslMnamerCheck) {
         # 2. Ensure mnamer is installed via pip3
         Write-Log "Installing/Upgrading mnamer via pip3 directly as root..." "INFO"
         $pipCmd = "pip3 install --upgrade mnamer || pip3 install --upgrade mnamer --break-system-packages"
-        $pipOutput = $pipCmd | wsl.exe -u root 2>&1
+        $pipOutput = $pipCmd.Replace("`r", "") | wsl.exe -u root 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "Pip installation of mnamer failed. Output: $pipOutput"
         }
