@@ -236,28 +236,23 @@ if (-not $DecryptionSuccess) {
     }
 }
 
-# 2. Create volatile temp file for WSL to read (will be deleted in finally block)
-$tempCredFile = New-TemporaryFile
-Set-Content -Path $tempCredFile.FullName -Value $plainPassword -NoNewline
-$wslTempCredPath = ConvertTo-WslPath $tempCredFile.FullName
-
 # =====================================================================
 # Step 1.5: Validate and Provision WSL Prerequisites (sshpass, pip3, mnamer)
 # =====================================================================
 Write-Log "Verifying WSL prerequisite packages (pip3, sshpass, mnamer)..." "INFO"
 
-$wslPipCheck = wsl.exe -e sh -c "command -v pip3"
-$wslSshpassCheck = wsl.exe -e sh -c "command -v sshpass"
-$wslMnamerCheck = wsl.exe -e sh -c "command -v mnamer"
+$wslPipCheck = wsl.exe -u root -e sh -c "command -v pip3"
+$wslSshpassCheck = wsl.exe -u root -e sh -c "command -v sshpass"
+$wslMnamerCheck = wsl.exe -u root -e sh -c "command -v mnamer"
 
 if (-not $wslPipCheck -or -not $wslSshpassCheck -or -not $wslMnamerCheck) {
     Write-Log "WSL is missing one or more required prerequisites. Initiating automated provisioning..." "WARNING"
     try {
         # 1. First ensure system packages (pip3, sshpass, python3) are installed
         if (-not $wslPipCheck -or -not $wslSshpassCheck) {
-            Write-Log "Installing system packages (python3-pip, sshpass) via apt-get..." "INFO"
-            $aptCmd = "cat '$wslTempCredPath' | sudo -S apt-get update -y && cat '$wslTempCredPath' | sudo -S apt-get install -y python3-pip sshpass python3"
-            $aptOutput = wsl.exe -e sh -c $aptCmd 2>&1
+            Write-Log "Installing system packages (python3-pip, sshpass) via apt-get directly as root..." "INFO"
+            $aptCmd = "apt-get update -y && apt-get install -y python3-pip sshpass python3"
+            $aptOutput = wsl.exe -u root -e sh -c $aptCmd 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "Apt installation failed. Output: $aptOutput"
             }
@@ -265,9 +260,9 @@ if (-not $wslPipCheck -or -not $wslSshpassCheck -or -not $wslMnamerCheck) {
         }
 
         # 2. Ensure mnamer is installed via pip3
-        Write-Log "Installing/Upgrading mnamer via pip3..." "INFO"
-        $pipCmd = "cat '$wslTempCredPath' | sudo -S pip3 install --upgrade mnamer --break-system-packages"
-        $pipOutput = wsl.exe -e sh -c $pipCmd 2>&1
+        Write-Log "Installing/Upgrading mnamer via pip3 directly as root..." "INFO"
+        $pipCmd = "pip3 install --upgrade mnamer --break-system-packages"
+        $pipOutput = wsl.exe -u root -e sh -c $pipCmd 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "Pip installation of mnamer failed. Output: $pipOutput"
         }
@@ -350,8 +345,8 @@ try {
 
         Write-Log "Processing [$($job.Name)] ($fileCount files found)..."
         
-        # Uses dynamically generated $wslTempCredPath
-        $wslCommand = "sshpass -f '$wslTempCredPath' rsync -avz --itemize-changes --timeout=60 --remove-source-files -e 'ssh -o StrictHostKeyChecking=no' '$($job.WslSource)' '$($job.Dest)'"
+        # Uses SSHPASS environment variable passed to sshpass -e
+        $wslCommand = "SSHPASS='$plainPassword' sshpass -e rsync -avz --itemize-changes --timeout=60 --remove-source-files -e 'ssh -o StrictHostKeyChecking=no' '$($job.WslSource)' '$($job.Dest)'"
         
         try {
             $tempOut = New-TemporaryFile
@@ -359,7 +354,7 @@ try {
             
             $processStartInfo = New-Object System.Diagnostics.ProcessStartInfo
             $processStartInfo.FileName = "cmd.exe"
-            $processStartInfo.Arguments = "/c wsl.exe $wslCommand > `"$($tempOut.FullName)`" 2> `"$($tempErr.FullName)`""
+            $processStartInfo.Arguments = "/c wsl.exe -u root $wslCommand > `"$($tempOut.FullName)`" 2> `"$($tempErr.FullName)`""
             $processStartInfo.UseShellExecute = $false
             $processStartInfo.CreateNoWindow = $true
 
@@ -409,8 +404,8 @@ try {
         
         $remoteRsyncCmd = "rsync -avz --delete --itemize-changes --timeout=60 -e 'ssh -o StrictHostKeyChecking=no' '$($job.SourcePath)' '$($job.DestPath)'"
         
-        # Uses dynamically generated $wslTempCredPath
-        $wslCommand = "sshpass -f '$wslTempCredPath' ssh -o StrictHostKeyChecking=no ${sourceUser}@${sourceHost} ""$remoteRsyncCmd"""
+        # Uses SSHPASS environment variable passed to sshpass -e
+        $wslCommand = "SSHPASS='$plainPassword' sshpass -e ssh -o StrictHostKeyChecking=no ${sourceUser}@${sourceHost} ""$remoteRsyncCmd"""
 
         try {
             $tempOut = New-TemporaryFile
@@ -418,7 +413,7 @@ try {
             
             $processStartInfo = New-Object System.Diagnostics.ProcessStartInfo
             $processStartInfo.FileName = "cmd.exe"
-            $processStartInfo.Arguments = "/c wsl.exe $wslCommand > `"$($tempOut.FullName)`" 2> `"$($tempErr.FullName)`""
+            $processStartInfo.Arguments = "/c wsl.exe -u root $wslCommand > `"$($tempOut.FullName)`" 2> `"$($tempErr.FullName)`""
             $processStartInfo.UseShellExecute = $false
             $processStartInfo.CreateNoWindow = $true
 
@@ -454,10 +449,7 @@ try {
     # Security Cleanup & Post-Flight Alerting
     # =====================================================================
     
-    # 1. Wipe the temporary plain-text credential file immediately
-    if (Test-Path $tempCredFile.FullName) {
-        Remove-Item -Path $tempCredFile.FullName -Force -ErrorAction SilentlyContinue
-    }
+    
     
     # 2. Reset / Shutdown WSL instances to release locked files and process handles
     if (Get-Command "wsl.exe" -ErrorAction SilentlyContinue) {

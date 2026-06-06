@@ -175,35 +175,19 @@ try {
     } else {
         Write-Log "WSL and default Linux distribution are available." "INFO"
         
-        # Pre-provision WSL package dependencies if RemoteSshPassword is provided
-        if ($RemoteSshPassword) {
-            Write-Log "Pre-provisioning WSL package dependencies (pip3, sshpass, mnamer)..." "INFO"
-            try {
-                $plainSshPwd = [System.Net.NetworkCredential]::new("", $RemoteSshPassword).Password
-                
-                # Create a temporary file for sudo password inside WSL
-                $tempFile = [System.IO.Path]::GetTempFileName()
-                Set-Content -Path $tempFile -Value $plainSshPwd -NoNewline
-                
-                # Convert path to WSL
-                $drive = $tempFile.Substring(0, 1).ToLower()
-                $wslPath = "/mnt/$drive" + $tempFile.Substring(2).Replace('\', '/')
-                
-                # Run installation commands
-                $aptCmd = "cat '$wslPath' | sudo -S apt-get update -y && cat '$wslPath' | sudo -S apt-get install -y python3-pip sshpass python3 && cat '$wslPath' | sudo -S pip3 install --upgrade mnamer --break-system-packages"
-                
-                $process = Start-Process -FilePath "wsl.exe" -ArgumentList "-e", "sh", "-c", $aptCmd -NoNewWindow -PassThru -Wait
-                
-                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
-                
-                if ($process.ExitCode -eq 0) {
-                    Write-Log "WSL dependencies successfully pre-provisioned." "INFO"
-                } else {
-                    Write-Log "Warning: WSL dependency pre-provisioning returned non-zero exit code: $($process.ExitCode)" "WARNING"
-                }
-            } catch {
-                Write-Log "Warning: Failed to pre-provision WSL dependencies during installation: $($_.Exception.Message)" "WARNING"
+        # Pre-provision WSL package dependencies directly as root
+        Write-Log "Pre-provisioning WSL package dependencies (pip3, sshpass, mnamer)..." "INFO"
+        try {
+            $aptCmd = "apt-get update -y && apt-get install -y python3-pip sshpass python3 && pip3 install --upgrade mnamer --break-system-packages"
+            $process = Start-Process -FilePath "wsl.exe" -ArgumentList "-u", "root", "-e", "sh", "-c", $aptCmd -NoNewWindow -PassThru -Wait
+            
+            if ($process.ExitCode -eq 0) {
+                Write-Log "WSL dependencies successfully pre-provisioned." "INFO"
+            } else {
+                Write-Log "Warning: WSL dependency pre-provisioning returned non-zero exit code: $($process.ExitCode)" "WARNING"
             }
+        } catch {
+            Write-Log "Warning: Failed to pre-provision WSL dependencies during installation: $($_.Exception.Message)" "WARNING"
         }
     }
 
