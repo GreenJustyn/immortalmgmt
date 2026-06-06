@@ -251,7 +251,7 @@ if (-not $wslPipCheck -or -not $wslSshpassCheck -or -not $wslMnamerCheck) {
         # 1. First ensure system packages (pip3, sshpass, python3) are installed
         if (-not $wslPipCheck -or -not $wslSshpassCheck) {
             Write-Log "Installing system packages (python3-pip, sshpass) via apt-get directly as root..." "INFO"
-            $aptCmd = "apt-get update -y && apt-get install -y python3-pip sshpass python3"
+            $aptCmd = "apt-get update && apt-get install -y python3-pip sshpass python3"
             $aptOutput = wsl.exe -u root -e sh -c $aptCmd 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "Apt installation failed. Output: $aptOutput"

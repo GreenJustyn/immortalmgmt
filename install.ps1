@@ -178,7 +178,7 @@ try {
         # Pre-provision WSL package dependencies directly as root
         Write-Log "Pre-provisioning WSL package dependencies (pip3, sshpass, mnamer)..." "INFO"
         try {
-            $aptCmd = "apt-get update -y && apt-get install -y python3-pip sshpass python3 && pip3 install --upgrade mnamer --break-system-packages"
+            $aptCmd = "apt-get update && apt-get install -y python3-pip sshpass python3 && pip3 install --upgrade mnamer --break-system-packages"
             $process = Start-Process -FilePath "wsl.exe" -ArgumentList "-u", "root", "-e", "sh", "-c", $aptCmd -NoNewWindow -PassThru -Wait
             
             if ($process.ExitCode -eq 0) {
