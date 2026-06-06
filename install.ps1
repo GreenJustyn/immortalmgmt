@@ -179,7 +179,21 @@ try {
         Write-Log "Pre-provisioning WSL package dependencies (pip3, sshpass, mnamer)..." "INFO"
         try {
             $aptCmd = "apt-get update && apt-get install -y python3-pip sshpass python3 && (pip3 install --upgrade mnamer || pip3 install --upgrade mnamer --break-system-packages)"
-            $output = $aptCmd.Replace("`r", "") | wsl.exe -u root 2>&1
+            
+            # Create a temp file on Windows with clean LF line endings to completely bypass PowerShell pipeline CRLF injection
+            $winTempFile = [System.IO.Path]::GetTempFileName() + ".sh"
+            $lfCmd = $aptCmd.Replace("`r`n", "`n").Replace("`r", "`n")
+            [System.IO.File]::WriteAllText($winTempFile, $lfCmd)
+            
+            # Convert Windows path to WSL format
+            $drive = $winTempFile.Substring(0, 1).ToLower()
+            $wslTempPath = "/mnt/$drive" + $winTempFile.Substring(2).Replace('\', '/')
+            
+            # Execute the script file inside WSL
+            $output = wsl.exe -u root sh $wslTempPath 2>&1
+            
+            # Clean up the temp file on Windows
+            Remove-Item $winTempFile -Force -ErrorAction SilentlyContinue
             
             if ($LASTEXITCODE -eq 0) {
                 Write-Log "WSL dependencies successfully pre-provisioned." "INFO"

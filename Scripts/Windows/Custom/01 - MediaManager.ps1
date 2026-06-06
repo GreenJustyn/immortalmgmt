@@ -82,6 +82,19 @@ function ConvertTo-WslPath {
     return "/mnt/$driveLetter$pathWithoutDrive"
 }
 
+function Invoke-WslCommandAsRoot {
+    param ([string]$command)
+    $winTempFile = [System.IO.Path]::GetTempFileName() + ".sh"
+    $lfCmd = $command.Replace("`r`n", "`n").Replace("`r", "`n")
+    [System.IO.File]::WriteAllText($winTempFile, $lfCmd)
+    $wslTempPath = ConvertTo-WslPath $winTempFile
+    $output = wsl.exe -u root sh $wslTempPath 2>&1
+    $exitCode = $LASTEXITCODE
+    Remove-Item $winTempFile -Force -ErrorAction SilentlyContinue
+    $global:LASTEXITCODE = $exitCode
+    return $output
+}
+
 # =====================================================================
 # Initialization & Just-In-Time Credential Extraction
 # =====================================================================
@@ -241,18 +254,22 @@ if (-not $DecryptionSuccess) {
 # =====================================================================
 Write-Log "Verifying WSL prerequisite packages (pip3, sshpass, mnamer)..." "INFO"
 
-$wslPipCheck = wsl.exe -u root -e sh -c "command -v pip3"
-$wslSshpassCheck = wsl.exe -u root -e sh -c "command -v sshpass"
-$wslMnamerCheck = wsl.exe -u root -e sh -c "command -v mnamer"
+$null = Invoke-WslCommandAsRoot "command -v pip3"
+$wslPipInstalled = ($LASTEXITCODE -eq 0)
 
-if (-not $wslPipCheck -or -not $wslSshpassCheck -or -not $wslMnamerCheck) {
+$null = Invoke-WslCommandAsRoot "command -v sshpass"
+$wslSshpassInstalled = ($LASTEXITCODE -eq 0)
+
+$null = Invoke-WslCommandAsRoot "command -v mnamer"
+$wslMnamerInstalled = ($LASTEXITCODE -eq 0)
+
+if (-not $wslPipInstalled -or -not $wslSshpassInstalled -or -not $wslMnamerInstalled) {
     Write-Log "WSL is missing one or more required prerequisites. Initiating automated provisioning..." "WARNING"
     try {
         # 1. First ensure system packages (pip3, sshpass, python3) are installed
-        if (-not $wslPipCheck -or -not $wslSshpassCheck) {
+        if (-not $wslPipInstalled -or -not $wslSshpassInstalled) {
             Write-Log "Installing system packages (python3-pip, sshpass) via apt-get directly as root..." "INFO"
-            $aptCmd = "apt-get update && apt-get install -y python3-pip sshpass python3"
-            $aptOutput = $aptCmd.Replace("`r", "") | wsl.exe -u root 2>&1
+            $aptOutput = Invoke-WslCommandAsRoot "apt-get update && apt-get install -y python3-pip sshpass python3"
             if ($LASTEXITCODE -ne 0) {
                 throw "Apt installation failed. Output: $aptOutput"
             }
@@ -261,8 +278,7 @@ if (-not $wslPipCheck -or -not $wslSshpassCheck -or -not $wslMnamerCheck) {
 
         # 2. Ensure mnamer is installed via pip3
         Write-Log "Installing/Upgrading mnamer via pip3 directly as root..." "INFO"
-        $pipCmd = "pip3 install --upgrade mnamer || pip3 install --upgrade mnamer --break-system-packages"
-        $pipOutput = $pipCmd.Replace("`r", "") | wsl.exe -u root 2>&1
+        $pipOutput = Invoke-WslCommandAsRoot "pip3 install --upgrade mnamer || pip3 install --upgrade mnamer --break-system-packages"
         if ($LASTEXITCODE -ne 0) {
             throw "Pip installation of mnamer failed. Output: $pipOutput"
         }
@@ -298,7 +314,7 @@ try {
     $mnamerCommand = "mnamer --no-overwrite --episode-directory '$wslTv' --episode-format '$epFormat' --movie-directory '$wslMovies' -vrb '$wslSource'"
 
     try {
-        $output = wsl.exe -e sh -c $mnamerCommand 2>&1
+        $output = Invoke-WslCommandAsRoot $mnamerCommand
         if ($LASTEXITCODE -eq 0) {
             $meaningfulOutput = $output | Where-Object { $_ -match "Processing|Moving|Renaming" -and $_ -notmatch "0 files processed" }
             if ($meaningfulOutput) {
@@ -320,8 +336,8 @@ try {
     # ---------------------------------------------------------------------
     Write-Log "Starting Local to Plex Transfer (Default Distro)..."
 
-    $sshpassCheck = wsl.exe -e sh -c "command -v sshpass"
-    if (-not $sshpassCheck) {
+    $null = Invoke-WslCommandAsRoot "command -v sshpass"
+    if ($LASTEXITCODE -ne 0) {
         Write-Log "sshpass is NOT installed in your default WSL distro. Please install it." "CRITICAL"
         exit
     }
