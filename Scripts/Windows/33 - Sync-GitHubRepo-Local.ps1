@@ -55,8 +55,108 @@ try {
             foreach ($prop in $LocalConfig.psobject.Properties) { $ConfigHash[$prop.Name] = $prop.Value }
             $Config = [PSCustomObject]$ConfigHash
 
-            # 2. Git Environment Check
-            if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "FATAL: Git is not installed." }
+            # 2. Git Environment Check & Automated Portable Git Installation
+            Write-Log "Verifying Git installation..." "INFO"
+            
+            $gitInstalled = $false
+            $gitExePath = ""
+            
+            # Check if Git is in system PATH
+            if (Get-Command git -ErrorAction SilentlyContinue) {
+                $gitInstalled = $true
+                $gitExePath = (Get-Command git).Source
+            } else {
+                # Resolve expected installation directory from Config or defaults
+                $installDir = $Config.InstallDir
+                if ([string]::IsNullOrWhiteSpace($installDir)) { $installDir = "C:\Scripts\Installs\Git" }
+                $downloadDir = $Config.DownloadDir
+                if ([string]::IsNullOrWhiteSpace($downloadDir)) { $downloadDir = "C:\Scripts\Temp\Downloads" }
+                
+                $gitCmdPath = Join-Path $installDir "cmd"
+                $expectedGitExe = Join-Path $gitCmdPath "git.exe"
+                
+                if (Test-Path $expectedGitExe) {
+                    Write-Log "Git found in expected installation folder but is missing from system PATH. Restoring PATH environment..." "WARNING"
+                    
+                    $machinePath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine)
+                    if ($machinePath -notlike "*$gitCmdPath*") {
+                        $newPath = "$machinePath;$gitCmdPath"
+                        [Environment]::SetEnvironmentVariable('Path', $newPath, [EnvironmentVariableTarget]::Machine)
+                        $env:Path = $newPath # Update current session
+                    }
+                    
+                    if (Get-Command git -ErrorAction SilentlyContinue) {
+                        $gitInstalled = $true
+                        $gitExePath = $expectedGitExe
+                        Write-Log "System PATH successfully restored." "INFO"
+                    }
+                }
+                
+                if (-not $gitInstalled) {
+                    Write-Log "Git is not installed on this server. Triggering automated Portable Git deployment..." "WARNING"
+                    
+                    try {
+                        # Fetch Latest Release Info from GitHub API
+                        Write-Log "Fetching latest Portable Git release info from GitHub API..." "INFO"
+                        $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+                        $release = Invoke-RestMethod -Uri $apiUrl
+                        $asset = $release.assets | Where-Object { $_.name -match "^PortableGit-.*-64-bit\.7z\.exe$" } | Select-Object -First 1
+                        
+                        if (-not $asset) {
+                            throw "Could not find a valid 64-bit Portable Git asset in the latest GitHub release."
+                        }
+                        
+                        $installerPath = Join-Path $downloadDir $asset.name
+                        
+                        # Download
+                        if (-not (Test-Path $downloadDir)) { New-Item -Path $downloadDir -ItemType Directory -Force | Out-Null }
+                        
+                        if (-not (Test-Path $installerPath)) {
+                            Write-Log "[DOWNLOAD] Downloading $($asset.name)..." "INFO"
+                            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $installerPath
+                        } else {
+                            Write-Log "[DOWNLOAD] Installer $($asset.name) already exists locally. Skipping download." "INFO"
+                        }
+                        
+                        # Forced Silent Extraction
+                        Write-Log "[UPDATE] Extracting silently to $installDir..." "INFO"
+                        if (-not (Test-Path $installDir)) {
+                            New-Item -Path $installDir -ItemType Directory -Force | Out-Null
+                        }
+                        
+                        $fullPath = (Resolve-Path $installDir).Path.TrimEnd('\')
+                        $argList = "-y", "-o$fullPath"
+                        
+                        $process = Start-Process -FilePath $installerPath -ArgumentList $argList -Wait -PassThru -NoNewWindow
+                        
+                        if ($process.ExitCode -ne 0) {
+                            throw "Extraction failed with exit code $($process.ExitCode)."
+                        }
+                        
+                        # Environment & PATH Update
+                        $machinePath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine)
+                        if ($machinePath -notlike "*$gitCmdPath*") {
+                            $newPath = "$machinePath;$gitCmdPath"
+                            [Environment]::SetEnvironmentVariable('Path', $newPath, [EnvironmentVariableTarget]::Machine)
+                            $env:Path = $newPath # Update current session
+                        }
+                        
+                        Start-Sleep -Seconds 2 # Small delay for file system
+                        
+                        if (Test-Path $expectedGitExe) {
+                            $gitInstalled = $true
+                            $gitExePath = $expectedGitExe
+                            $version = & $gitExePath --version
+                            Write-Log "[SUCCESS] Portable Git successfully deployed: $version" "INFO"
+                        } else {
+                            throw "Extraction reported success, but git.exe is missing from $expectedGitExe."
+                        }
+                    } catch {
+                        throw "Failed to deploy Portable Git: $($_.Exception.Message)"
+                    }
+                }
+            }
+
             $RepoPath = $Config.LocalRepoPath # Usually <BaseDir>\Git\<RepoName>
             $Branch   = $Config.Branch
             $RepoUrl  = $Config.RepoUrl

@@ -1,5 +1,7 @@
 {
     "RepoUrl": "https://github.com/GreenJustyn/immortalmgmt.git",
     "Branch": "main",
-    "LocalRepoPath": "C:\\Scripts\\Git\\immortalmgmt"
+    "LocalRepoPath": "C:\\Scripts\\Git\\immortalmgmt",
+    "InstallDir": "C:\\Scripts\\Installs\\Git",
+    "DownloadDir": "C:\\Scripts\\Temp\\Downloads"
 }

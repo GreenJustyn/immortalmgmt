@@ -296,11 +296,6 @@
             "StartOffsetMinutes": 5
         },
         {
-            "ScriptName": "98 - Git Script.ps1",
-            "IntervalMinutes": 1440,
-            "StartOffsetMinutes": 25
-        },
-        {
             "ScriptName": "99 - Daily Maintenance Clean Up Script.ps1",
             "IntervalMinutes": 1440,
             "StartOffsetMinutes": 30
