@@ -261,7 +261,7 @@ if (-not $wslPipCheck -or -not $wslSshpassCheck -or -not $wslMnamerCheck) {
 
         # 2. Ensure mnamer is installed via pip3
         Write-Log "Installing/Upgrading mnamer via pip3 directly as root..." "INFO"
-        $pipCmd = "pip3 install --upgrade mnamer --break-system-packages"
+        $pipCmd = "pip3 install --upgrade mnamer || pip3 install --upgrade mnamer --break-system-packages"
         $pipOutput = $pipCmd | wsl.exe -u root 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "Pip installation of mnamer failed. Output: $pipOutput"
