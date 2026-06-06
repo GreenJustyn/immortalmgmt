@@ -250,12 +250,12 @@ if (-not $DecryptionSuccess) {
 }
 
 # =====================================================================
-# Step 1.5: Validate and Provision WSL Prerequisites (sshpass, pip3, mnamer)
+# Step 1.5: Validate and Provision WSL Prerequisites (sshpass, pipx, mnamer)
 # =====================================================================
-Write-Log "Verifying WSL prerequisite packages (pip3, sshpass, mnamer)..." "INFO"
+Write-Log "Verifying WSL prerequisite packages (pipx, sshpass, mnamer)..." "INFO"
 
-$null = Invoke-WslCommandAsRoot "command -v pip3"
-$wslPipInstalled = ($LASTEXITCODE -eq 0)
+$null = Invoke-WslCommandAsRoot "command -v pipx"
+$wslPipxInstalled = ($LASTEXITCODE -eq 0)
 
 $null = Invoke-WslCommandAsRoot "command -v sshpass"
 $wslSshpassInstalled = ($LASTEXITCODE -eq 0)
@@ -263,24 +263,24 @@ $wslSshpassInstalled = ($LASTEXITCODE -eq 0)
 $null = Invoke-WslCommandAsRoot "command -v mnamer"
 $wslMnamerInstalled = ($LASTEXITCODE -eq 0)
 
-if (-not $wslPipInstalled -or -not $wslSshpassInstalled -or -not $wslMnamerInstalled) {
+if (-not $wslPipxInstalled -or -not $wslSshpassInstalled -or -not $wslMnamerInstalled) {
     Write-Log "WSL is missing one or more required prerequisites. Initiating automated provisioning..." "WARNING"
     try {
-        # 1. First ensure system packages (pip3, sshpass, python3) are installed
-        if (-not $wslPipInstalled -or -not $wslSshpassInstalled) {
-            Write-Log "Installing system packages (python3-pip, sshpass) via apt-get directly as root..." "INFO"
-            $aptOutput = Invoke-WslCommandAsRoot "apt-get update && apt-get install -y python3-pip sshpass python3"
+        # 1. First ensure system packages (pipx, sshpass, python3) are installed
+        if (-not $wslPipxInstalled -or -not $wslSshpassInstalled) {
+            Write-Log "Installing system packages (pipx, sshpass) via apt-get directly as root..." "INFO"
+            $aptOutput = Invoke-WslCommandAsRoot "apt-get update && apt-get install -y pipx sshpass python3"
             if ($LASTEXITCODE -ne 0) {
                 throw "Apt installation failed. Output: $aptOutput"
             }
             Write-Log "System packages successfully installed." "INFO"
         }
 
-        # 2. Ensure mnamer is installed via pip3
-        Write-Log "Installing/Upgrading mnamer via pip3 directly as root..." "INFO"
-        $pipOutput = Invoke-WslCommandAsRoot "pip3 install --upgrade mnamer || pip3 install --upgrade mnamer --break-system-packages"
+        # 2. Ensure mnamer is installed/upgraded via pipx (isolated virtual environment prevents trixie package conflicts)
+        Write-Log "Installing/Upgrading mnamer via pipx directly as root..." "INFO"
+        $pipxOutput = Invoke-WslCommandAsRoot "(pipx install mnamer || pipx upgrade mnamer) && ln -sf /root/.local/bin/mnamer /usr/local/bin/mnamer"
         if ($LASTEXITCODE -ne 0) {
-            throw "Pip installation of mnamer failed. Output: $pipOutput"
+            throw "Pipx installation of mnamer failed. Output: $pipxOutput"
         }
         Write-Log "mnamer successfully provisioned." "INFO"
         
@@ -289,7 +289,7 @@ if (-not $wslPipInstalled -or -not $wslSshpassInstalled -or -not $wslMnamerInsta
         exit 1
     }
 } else {
-    Write-Log "All WSL prerequisites (pip3, sshpass, mnamer) are already installed and verified." "INFO"
+    Write-Log "All WSL prerequisites (pipx, sshpass, mnamer) are already installed and verified." "INFO"
 }
 
 # =====================================================================

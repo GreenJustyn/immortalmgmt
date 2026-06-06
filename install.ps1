@@ -178,7 +178,7 @@ try {
         # Pre-provision WSL package dependencies directly as root via stdin pipe to bypass wsl.exe argument parsing bugs
         Write-Log "Pre-provisioning WSL package dependencies (pip3, sshpass, mnamer)..." "INFO"
         try {
-            $aptCmd = "apt-get update && apt-get install -y python3-pip sshpass python3 && (pip3 install --upgrade mnamer || pip3 install --upgrade mnamer --break-system-packages)"
+            $aptCmd = "apt-get update && apt-get install -y pipx sshpass python3 && (pipx install mnamer || pipx upgrade mnamer) && ln -sf /root/.local/bin/mnamer /usr/local/bin/mnamer"
             
             # Create a temp file on Windows with clean LF line endings to completely bypass PowerShell pipeline CRLF injection
             $winTempFile = [System.IO.Path]::GetTempFileName() + ".sh"
