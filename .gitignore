@@ -5,6 +5,9 @@ Credentials/*.enc
 Credentials/*.pwd
 !Credentials/*.md
 
+# Custom Scripts Sub-directory in main branch
+# Scripts/Windows/Custom/*
+
 # Logs
 Logs/*.log
 Scripts/Windows/Logs/*.log
