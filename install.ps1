@@ -370,7 +370,7 @@ try {
         $EncryptedText = ConvertFrom-SecureString $ServiceAccountPassword -Key $KeyBytes
         $EncryptedText | Out-File -FilePath $EncFile -Encoding utf8 -Force
         
-        # Set strict ACL permissions
+        # Set strict ACL permissions (only SYSTEM and Administrators during pre-stage; New-LocalAdminAccount.ps1 will add svc_immortalmgmt after creation)
         try {
             $Acls = @($KeyFile, $EncFile)
             foreach ($file in $Acls) {
@@ -378,8 +378,7 @@ try {
                 $Acl.SetAccessRuleProtection($true, $false)
                 $Rules = @(
                     [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
-                    [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
-                    [System.Security.AccessControl.FileSystemAccessRule]::new("svc_immortalmgmt", "ReadAndExecute", "Allow")
+                    [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow")
                 )
                 $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
                 foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }

@@ -93,29 +93,6 @@ try {
             }
         }
 
-        # Secure the key and enc files with ACLs (only SYSTEM, Administrators, and svc_immortalmgmt have access)
-        try {
-            $Acls = @($KeyFile, $EncFile)
-            foreach ($file in $Acls) {
-                if (Test-Path $file) {
-                    $Acl = Get-Acl -Path $file
-                    $Acl.SetAccessRuleProtection($true, $false)
-                    $Rules = @(
-                        [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
-                        [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
-                        [System.Security.AccessControl.FileSystemAccessRule]::new($Config.AccountName, "ReadAndExecute", "Allow")
-                    )
-                    # Clear existing rules
-                    $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
-                    foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
-                    Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
-                }
-            }
-            Write-Log "Credential key files ACL security hardened." "INFO"
-        } catch {
-            Write-Log "Warning: Failed to set strict ACLs on credential files: $($_.Exception.Message)" "WARNING"
-        }
-
             # Idempotent Logic
             $UserExists = Get-LocalUser -Name $Config.AccountName -ErrorAction SilentlyContinue
 
@@ -144,6 +121,29 @@ try {
                 }
             } catch [Microsoft.PowerShell.Commands.InvalidPasswordException] {
                 throw "The password provided does not meet the Windows complexity or length requirements. Please try a stronger password (must contain uppercase, lowercase, numbers, and symbols, and be at least 8-14 characters)."
+            }
+
+            # Secure the key and enc files with ACLs (only SYSTEM, Administrators, and the newly created/verified service account have access)
+            try {
+                $Acls = @($KeyFile, $EncFile)
+                foreach ($file in $Acls) {
+                    if (Test-Path $file) {
+                        $Acl = Get-Acl -Path $file
+                        $Acl.SetAccessRuleProtection($true, $false)
+                        $Rules = @(
+                            [System.Security.AccessControl.FileSystemAccessRule]::new("SYSTEM", "FullControl", "Allow"),
+                            [System.Security.AccessControl.FileSystemAccessRule]::new("Administrators", "FullControl", "Allow"),
+                            [System.Security.AccessControl.FileSystemAccessRule]::new($Config.AccountName, "ReadAndExecute", "Allow")
+                        )
+                        # Clear existing rules
+                        $Acl.Access | ForEach-Object { $Acl.RemoveAccessRule($_) } | Out-Null
+                        foreach ($Rule in $Rules) { $Acl.AddAccessRule($Rule) }
+                        Set-Acl -Path $file -AclObject $Acl -ErrorAction Stop
+                    }
+                }
+                Write-Log "Credential key files ACL security hardened." "INFO"
+            } catch {
+                Write-Log "Warning: Failed to set strict ACLs on credential files: $($_.Exception.Message)" "WARNING"
             }
 
             # Hardening Permissions for the framework repository
