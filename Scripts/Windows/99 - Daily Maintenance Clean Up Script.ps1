@@ -59,26 +59,55 @@ try {
 
             Write-Log "Preparing to create/update scheduled task: $taskName" "INFO"
 
-            # Define the action, trigger, and principal
-            $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c wsl.exe --shutdown"
-            $trigger = New-ScheduledTaskTrigger -Daily -At "11:59 PM"
-            $principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-
-            # Ensure the task doesn't already exist to avoid errors, or overwrite it if it does
-            if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
-                Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-                Write-Log "Existing task '$taskName' found and removed." "INFO"
+            # Define the action, trigger, and principal with robust validation
+            $action = $null
+            try {
+                $execPath = Join-Path $env:SystemRoot "System32\cmd.exe"
+                if (-not (Test-Path $execPath)) { $execPath = "cmd.exe" }
+                $action = New-ScheduledTaskAction -Execute $execPath -Argument "/c wsl.exe --shutdown" -ErrorAction Stop
+            } catch {
+                throw "Failed to create ScheduledTaskAction for WSL Daily Shutdown: $($_.Exception.Message)"
+            }
+            if (-not $action) {
+                throw "New-ScheduledTaskAction returned null/empty for WSL Daily Shutdown. Please verify CIM/WMI Task Scheduler health."
             }
 
-            # Register the new scheduled task
-            Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Description $taskDescription | Out-Null
+            $trigger = $null
+            try {
+                $trigger = New-ScheduledTaskTrigger -Daily -At "11:59 PM" -ErrorAction Stop
+            } catch {
+                throw "Failed to create ScheduledTaskTrigger for WSL Daily Shutdown: $($_.Exception.Message)"
+            }
+            if (-not $trigger) {
+                throw "New-ScheduledTaskTrigger returned null for WSL Daily Shutdown."
+            }
 
-            Write-Log "Scheduled task '$taskName' successfully created!" "INFO"
+            $principal = $null
+            try {
+                $principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest -ErrorAction Stop
+            } catch {
+                throw "Failed to create ScheduledTaskPrincipal for WSL Daily Shutdown: $($_.Exception.Message)"
+            }
+            if (-not $principal) {
+                throw "New-ScheduledTaskPrincipal returned null for WSL Daily Shutdown."
+            }
 
+            # Ensure the task doesn't already exist to avoid errors, or overwrite it if it does
+            try {
+                if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+                    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction Stop
+                    Write-Log "Existing task '$taskName' found and removed." "INFO"
+                }
+
+                # Register the new scheduled task
+                Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Description $taskDescription -ErrorAction Stop | Out-Null
+                Write-Log "Scheduled task '$taskName' successfully created!" "INFO"
+            } catch {
+                throw "Failed to register Scheduled Task '$taskName': $($_.Exception.Message)"
+            }
         } catch {
-            # Catch any terminating errors and log them
-            Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
-
+            Write-Log "Script encountered a terminating error during task registration: $($_.Exception.Message)" "CRITICAL"
+            $scriptExitCode = 1
         }
 } catch {
     Write-Log "Script encountered a terminating error: $($_.Exception.Message)" "CRITICAL"
@@ -159,6 +188,11 @@ try {
     Write-Log "Script execution completed." -End
 }
 
+# Propagate True Exit Code safely to parent without terminating it
 if ($scriptExitCode -ne 0) {
-    exit $scriptExitCode
+    $global:LASTEXITCODE = 1
+    return
+} else {
+    $global:LASTEXITCODE = 0
+    return
 }

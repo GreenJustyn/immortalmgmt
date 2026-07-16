@@ -253,5 +253,9 @@ try {
 }
 
 if ($scriptExitCode -ne 0) {
-    exit $scriptExitCode
+    $global:LASTEXITCODE = 1
+    return
+} else {
+    $global:LASTEXITCODE = 0
+    return
 }

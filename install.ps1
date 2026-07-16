@@ -394,10 +394,18 @@ try {
     Write-Host "Executing New-LocalAdminAccount script to create 'svc_immortalmgmt' and lock down repository..." -ForegroundColor Gray
     $AccountScript = Join-Path (Join-Path $BaseDir "Scripts\Windows") "30 - New-LocalAdminAccount.ps1"
     if (Test-Path $AccountScript) {
+        $global:LASTEXITCODE = 0
         $LASTEXITCODE = 0
         & $AccountScript
-        if ($LASTEXITCODE -ne 0) {
-            throw "Service account setup failed with exit code $LASTEXITCODE. The password may not meet complexity requirements or the account cannot be created."
+        $childExitCode = 0
+        if ($null -ne $global:LASTEXITCODE -and $global:LASTEXITCODE -ne 0) {
+            $childExitCode = $global:LASTEXITCODE
+        } elseif ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+            $childExitCode = $LASTEXITCODE
+        }
+
+        if ($childExitCode -ne 0) {
+            throw "Service account setup failed with exit code $childExitCode. The password may not meet complexity requirements or the account cannot be created."
         }
         Write-Host "Service account created and repository security hardened successfully!" -ForegroundColor Green
     }
@@ -478,8 +486,21 @@ try {
                 Write-Host "Executing 000 - Bootstrap Script.ps1..." -ForegroundColor Gray
                 $CurrentDir = Get-Location
                 Set-Location (Split-Path $BootstrapScript)
+                $global:LASTEXITCODE = 0
+                $LASTEXITCODE = 0
                 & $BootstrapScript
                 Set-Location $CurrentDir
+
+                $childExitCode = 0
+                if ($null -ne $global:LASTEXITCODE -and $global:LASTEXITCODE -ne 0) {
+                    $childExitCode = $global:LASTEXITCODE
+                } elseif ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+                    $childExitCode = $LASTEXITCODE
+                }
+
+                if ($childExitCode -ne 0) {
+                    throw "Bootstrap execution failed with exit code $childExitCode."
+                }
                 Write-Host "Scheduled tasks registered and bootstrapped successfully!" -ForegroundColor Green
             } catch {
                 Write-Log "Warning: Bootstrap script returned an error: $($_.Exception.Message)" "WARNING"
