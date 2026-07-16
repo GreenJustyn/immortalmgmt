@@ -9,6 +9,8 @@
 * 🔄 **Headless GitOps Synchronization**: Tasks pull repository updates silently in the background into a secure staging area before mirroring files into active directories via `robocopy`, ensuring zero lock-file conflicts.
 * 🏗️ **5-Layer Hierarchical Configuration (Hiera Model)**: The platform executes the exact same `.ps1` code across all systems while pulling layered JSON variables based on node identity:
   * `Global` $\rightarrow$ `Org` $\rightarrow$ `Environment` $\rightarrow$ `Operating System` $\rightarrow$ `Host`
+* 🐧 **Zero-Dependency WSL & Cross-Platform Orchestration**: Automated on-the-fly provisioning of Windows Subsystem for Linux (WSL), Ubuntu, pipx, and Linux package pipelines straight from native `.ps1` code.
+* 🛡️ **Robust Verify-Then-Sync-Then-Delete Replication**: Enterprise-grade file transfer orchestration with automatic mutual exclusion OS locking (Mutex protection), bounded timeout KeepAlives, and atomic server cache flushing (`sync`) to guarantee zero data loss during network interruptions or hard server reboots.
 * 🧹 **Self-Healing Disk Management**: Automated system health reports actively monitor disk space—triggering a robust 7-day safe-purge of local temporary folders if capacity drops below thresholds.
 * 🧪 **Pester 5+ Compliance Validation**: Complete unit testing across networking, dependencies, and script syntax validation before live execution.
 
@@ -20,12 +22,13 @@ The codebase is strictly segmented to protect the execution logic from local con
 
 ```text
 immortalmgmt/
-  ├── Credentials/       # Secure local XML credential storage (Ignored in Git)
+  ├── Credentials/       # Secure local symmetric credential storage (Ignored in Git)
   ├── Functions/         # Core operational modules (Get-ScriptConfig.ps1)
-  ├── Logs/              # Standardized system logging
+  ├── Logs/              # Standardized system logging & OS Mutex Locks
   ├── Scripts/           
   │   ├── Linux/         # Future Linux execution routines
   │   └── Windows/       # Over 50 Windows automated operational scripts
+  │       └── Custom/    # Sequentially executed custom deployment and processing pipelines
   ├── Tests/             # Pester compliance test scripts
   ├── Variables/         # The layered configuration files (.json)
   ├── install.ps1        # Out-Of-Box host initialization & variable discovery
