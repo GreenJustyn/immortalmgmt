@@ -619,13 +619,14 @@ try {
     }
 
     Write-Log "#################### --------- End of script -- $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') --------- ####################"
-
-    # 4. Propagate True Exit Code safely to Master Script without terminating it
-    if ($scriptErrorCount -gt 0) {
-        $global:LASTEXITCODE = 1
-        return
-    } else {
-        $global:LASTEXITCODE = 0
-        return
-    }
 }
+
+# 4. Propagate True Exit Code safely to Master Script without terminating it
+if ($scriptErrorCount -gt 0) {
+    $global:LASTEXITCODE = 1
+    return
+} else {
+    $global:LASTEXITCODE = 0
+    return
+}
+

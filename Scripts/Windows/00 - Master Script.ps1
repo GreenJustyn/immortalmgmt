@@ -176,13 +176,13 @@ try {
     }
 
     Write-Log "Meta Master execution completed." -End
+}
 
-    # Propagate True Exit Code safely to parent without hard-terminating the session
-    if ($failedCount -gt 0 -or $scriptExitCode -ne 0) {
-        $global:LASTEXITCODE = 1
-        return
-    } else {
-        $global:LASTEXITCODE = 0
-        return
-    }
+# Propagate True Exit Code safely to parent without hard-terminating the session
+if ($failedCount -gt 0 -or $scriptExitCode -ne 0) {
+    $global:LASTEXITCODE = 1
+    return
+} else {
+    $global:LASTEXITCODE = 0
+    return
 }
