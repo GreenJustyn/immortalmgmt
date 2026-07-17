@@ -405,25 +405,17 @@ try {
         
         $wslCommand = "sshpass -e rsync $rsyncFlags -e 'ssh $sshOptions' '$($job.WslSource)' '$($job.Dest)' && sshpass -e ssh $sshOptions ${remoteUser}@${remoteHost} sync"
         
+        $oldSshPass = $env:SSHPASS
+        $oldWslEnv = $env:WSLENV
         try {
-            $tempOut = New-TemporaryFile
-            $tempErr = New-TemporaryFile
-            
-            $processStartInfo = New-Object System.Diagnostics.ProcessStartInfo
-            $processStartInfo.FileName = "cmd.exe"
-            $processStartInfo.Arguments = "/c wsl.exe -u root $wslCommand > `"$($tempOut.FullName)`" 2> `"$($tempErr.FullName)`""
-            $processStartInfo.UseShellExecute = $false
-            $processStartInfo.CreateNoWindow = $true
-            $processStartInfo.EnvironmentVariables["SSHPASS"] = $plainPassword
-            $processStartInfo.EnvironmentVariables["WSLENV"]  = "SSHPASS/u"
+            $env:SSHPASS = $plainPassword
+            $env:WSLENV = "SSHPASS/u"
 
-            $process = [System.Diagnostics.Process]::Start($processStartInfo)
-            $process.WaitForExit()
-            
-            $stdout = Get-Content $tempOut.FullName -Raw
-            $stderr = Get-Content $tempErr.FullName -Raw
+            Write-Log "[$($job.Name)] Executing rsync transfer and remote sync via WSL..."
+            $stdout = Invoke-WslCommandAsRoot $wslCommand
+            $processExitCode = $global:LASTEXITCODE
 
-            if ($process.ExitCode -eq 0) {
+            if ($processExitCode -eq 0) {
                 $changes = $stdout -split "`n" | Where-Object { $_ -notmatch "sending incremental file list|sent .* bytes|total size is" -and $_.Trim() -ne "" }
                 if ($changes) {
                     Write-Log "[$($job.Name)] Transfer & Sync Success:`n$($changes -join "`n")"
@@ -441,18 +433,18 @@ try {
                     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
                     
             } else {
-                Write-Log "rsync/sync error for [$($job.Name)]. Exit code: $($process.ExitCode)" "ERROR"
-                Write-Log "StdOut: $stdout" "ERROR"
-                Write-Log "StdErr: $stderr" "ERROR"
+                Write-Log "rsync/sync error for [$($job.Name)]. Exit code: $processExitCode" "ERROR"
+                Write-Log "Output/Error: $stdout" "ERROR"
                 $scriptErrorCount++
             }
-            
-            Remove-Item $tempOut -Force
-            Remove-Item $tempErr -Force
         }
         catch {
             Write-Log "Execution error for [$($job.Name)]: $($_.Exception.Message)" "CRITICAL"
             $scriptErrorCount++
+        }
+        finally {
+            if ($null -ne $oldSshPass) { $env:SSHPASS = $oldSshPass } else { Remove-Item Env:\SSHPASS -ErrorAction SilentlyContinue }
+            if ($null -ne $oldWslEnv) { $env:WSLENV = $oldWslEnv } else { Remove-Item Env:\WSLENV -ErrorAction SilentlyContinue }
         }
     }
 
@@ -480,25 +472,17 @@ try {
         
         $wslCommand = "sshpass -e ssh $remoteSshOptions ${sourceUser}@${sourceHost} ""$remoteChainedCmd"""
 
+        $oldSshPass = $env:SSHPASS
+        $oldWslEnv = $env:WSLENV
         try {
-            $tempOut = New-TemporaryFile
-            $tempErr = New-TemporaryFile
-            
-            $processStartInfo = New-Object System.Diagnostics.ProcessStartInfo
-            $processStartInfo.FileName = "cmd.exe"
-            $processStartInfo.Arguments = "/c wsl.exe -u root $wslCommand > `"$($tempOut.FullName)`" 2> `"$($tempErr.FullName)`""
-            $processStartInfo.UseShellExecute = $false
-            $processStartInfo.CreateNoWindow = $true
-            $processStartInfo.EnvironmentVariables["SSHPASS"] = $plainPassword
-            $processStartInfo.EnvironmentVariables["WSLENV"]  = "SSHPASS/u"
+            $env:SSHPASS = $plainPassword
+            $env:WSLENV = "SSHPASS/u"
 
-            $process = [System.Diagnostics.Process]::Start($processStartInfo)
-            $process.WaitForExit()
+            Write-Log "[$($job.Name)] Executing Plex -> Jellyfin Mirror via WSL..."
+            $stdout = Invoke-WslCommandAsRoot $wslCommand
+            $processExitCode = $global:LASTEXITCODE
 
-            $stdout = Get-Content $tempOut.FullName -Raw
-            $stderr = Get-Content $tempErr.FullName -Raw
-
-            if ($process.ExitCode -eq 0) {
+            if ($processExitCode -eq 0) {
                 $changes = $stdout -split "`n" | Where-Object { $_ -notmatch "sending incremental file list|sent .* bytes|total size is" -and $_.Trim() -ne "" }
                 if ($changes) {
                     Write-Log "[$($job.Name)] Mirror & Sync Processed. Itemized Changes:`n$($changes -join "`n")"
@@ -506,18 +490,18 @@ try {
                     Write-Log "[$($job.Name)] Mirror & Sync Complete. Folders are perfectly identical."
                 }
             } else {
-                Write-Log "Mirror failed for [$($job.Name)]. Exit code: $($process.ExitCode)" "ERROR"
-                Write-Log "StdOut: $stdout" "ERROR"
-                Write-Log "StdErr: $stderr" "ERROR"
+                Write-Log "Mirror failed for [$($job.Name)]. Exit code: $processExitCode" "ERROR"
+                Write-Log "Output/Error: $stdout" "ERROR"
                 $scriptErrorCount++
             }
-            
-            Remove-Item $tempOut -Force
-            Remove-Item $tempErr -Force
         }
         catch {
             Write-Log "Execution error for [$($job.Name)]: $($_.Exception.Message)" "CRITICAL"
             $scriptErrorCount++
+        }
+        finally {
+            if ($null -ne $oldSshPass) { $env:SSHPASS = $oldSshPass } else { Remove-Item Env:\SSHPASS -ErrorAction SilentlyContinue }
+            if ($null -ne $oldWslEnv) { $env:WSLENV = $oldWslEnv } else { Remove-Item Env:\WSLENV -ErrorAction SilentlyContinue }
         }
     }
     
